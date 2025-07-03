@@ -121,6 +121,7 @@ def linked_ae(encoding_dim, gene_num, act, init,seed, kl1, kl2):
 					output_dim=gene_num,encoded=encoded, activation="sigmoid")
 
 	autoencoder = keras.Sequential()
+	autoencoder.add(input_img)
 	autoencoder.add(encoded)
 	autoencoder.add(decoder)
 	return(autoencoder)
@@ -161,7 +162,10 @@ def train_model(autoencoder, x_train, x_train_noisy, epochs, seed, batch_size, l
 	optim = optimizers.SGD(learning_rate=lr, momentum=.9) # lr=0.001, rho=0.95, epsilon=1e-07
 	autoencoder.compile(optimizer=optim, loss=tf.keras.losses.BinaryCrossentropy(from_logits=False)) # "mse" tf.keras.losses.BinaryCrossentropy(from_logits=False) mse
 
-	history = autoencoder.fit(x_train_noisy, x_train,
+	x_train_f = np.clip(x_train, 0., 1.).astype("float32") 
+	x_train_noisy_f = np.clip(x_train_noisy, 0., 1.).astype("float32") 
+
+	history = autoencoder.fit(x_train_noisy_f, x_train_f,
 	              	epochs=epochs,
 	                batch_size=batch_size,
 	                shuffle=True,
