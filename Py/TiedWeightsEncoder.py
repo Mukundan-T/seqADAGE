@@ -19,6 +19,7 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import optimizers, regularizers, layers, initializers, models, activations
 from tensorflow.keras.layers import Layer
+from tensorflow.keras import backend as K
 
 
 class TiedWeightsEncoder(Layer):
@@ -27,22 +28,50 @@ class TiedWeightsEncoder(Layer):
 	Encoder - Decoder tied weights
 	"""
 
-	def __init__(self, output_dim, encoded, activation="sigmoid", **kwargs):
+	def __init__(self, output_dim, encoded, activation="sigmoid",  **kwargs): #
 		self.output_dim = output_dim
 		self.encoder = encoded
-		self.activation = activations.get(activation)
+		#self.activation = "tanh" #activations.get(activation)
 		super(TiedWeightsEncoder, self).__init__(**kwargs)
 
-	def build(self, input_shape):
-		self.kernel = self.encoder.weights
-		super(TiedWeightsEncoder, self).build(input_shape)
-
-	def call(self, x):
-		output = tf.matmul(x - self.encoder.weights[1], tf.transpose(self.encoder.weights[0]), name = 'dot')
-		#print(output)
-		if self.activation is not None:
-			output = self.activation(output)
-		return output
+	def build(self): #, input_shape
+		print("build")
+		self.kernel = K.transpose(self.encoder.kernel) #self.encoder.weights
+		print("kernel set")
+		self.bias = self.add_weight(
+            shape=(self.output_dim,),
+            initializer="zeros",
+            trainable=True,
+            name="bias"
+        )
+		print("bias set")
+		print(self.kernel.dtype)
+		print(self.encoder.weights[1].dtype)
+		print(self.encoder.weights[0].dtype)
+		#super(TiedWeightsEncoder, self).build() #input_shape
 
 	def compute_output_shape(self, input_shape):
-		return input_shape[0], self.output_dim
+		return input_shape
+
+	def call(self, x):
+		if not training:
+            #print("not training")
+			return self.kernel
+		print("x dt: " + str(x.dtype))
+		#print(x[0:3][0:3])
+		print("kern dt: " + str(self.kernel.dtype))
+		#print(self.kernel[0:3][0:3])
+		print("b dt: " + str(self.bias.dtype))
+		#print(self.bias[0:3])
+		#output = tf.matmul(x - self.encoder.weights[1], tf.transpose(self.encoder.weights[0]), name = 'dot')
+		#print(output)i
+		#output = K.dot(x, self.kernel) + self.bias
+		output = self.kernel
+		#print(output[0:3][0:3])
+		#if self.activation is not None:
+		#	output = self.activation(output)
+		print("output (just kernel) dt: " + str(output))
+		return output
+
+	#def compute_output_shape(self): #, input_shape
+	#	return input_shape[0], self.output_dim #input_shape[0], 
