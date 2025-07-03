@@ -30,12 +30,14 @@ import csv
 import pandas as pd
 
 from tensorflow.keras import optimizers, regularizers, layers, initializers, models
-from tensorflow.keras.layers import Input, Dense
+from tensorflow.keras.layers import Input, Dense, Dropout
 #from keras.models import Model, Sequential
 #from tensorflow.keras import initializers
 import TiedWeightsEncoder as tw
 import Adage as ad
 from AdageHyperModel import AdageHyperModel
+
+from autoencoders import DenseLayerAutoencoder
 
 import keras_tuner
 import matplotlib.pyplot as plt
@@ -120,37 +122,37 @@ def run_model(input_file, post_data = '', seed=123, enc_dim = 300, epochs=50, kl
 	"""
 
 	"""
-
+	## check if there is data from post fine-tuning
 	if(post_data == ''):
 		post_data = input_file
 
-	print("updated22")
-	#print(keras.backend.backend())
-	#all_comp = np.loadtxt(open(input_file, "rb"), delimiter=',', skiprows = 1)
 	all_comp = pd.read_csv(input_file, index_col=0)
-	 # this is the size of our input
+	
+	# this is the size of our input
 	gene_num = np.size(all_comp, 0)
+	# size of hidden layer
 	encoding_dim = enc_dim
 
-
+	# prepare data
 	x_train, x_train_noisy = prep_data(all_comp, seed)
 
 	if(tied):
-		autoencoder = linked_ae(encoding_dim, gene_num, act, init,
+		print("tied")
+		autoencoder = linked_ae_ae(encoding_dim, gene_num, act, init,
 								seed, kl1, kl2)
+		print("made ae")
 	else:
 		autoencoder = unlinked_ae(encoding_dim, gene_num, act, init,
 								  seed, kl1, kl2, pre_w)
-	#autoencoder.summary()
+
+	#print("about to train")
 	autoencoder, history = train_model(autoencoder, x_train,
 		                               x_train_noisy, epochs,
 									   seed, batch_size, lr, v)
 
-
-
     # save second model before fine-tuning
 	weights_tmp, b_weights_tmp = autoencoder.get_weights()[0:2]
-	file_desc = ( input_file[:-4]
+	file_desc = ( input_file[13:-4]
 	             + post_data[16:-4]
 	             + '_seed:' + str(seed)
 				 + '_nodes:' + str(encoding_dim)
@@ -169,36 +171,20 @@ def run_model(input_file, post_data = '', seed=123, enc_dim = 300, epochs=50, kl
 
 	#autoencoder.trainable = False
 	base_weights = autoencoder.get_weights()
-	#autoencoder.save('/tmp/base_model')
-	print(np.shape(autoencoder.get_weights()))
-	#base_model = tf.keras.models.load_model('/tmp/base_model')
-
 
 	all_comp_post = pd.read_csv(post_data, index_col=0)
 	x_train2, x_train2_noisy = prep_data(all_comp_post, seed)
 
-	#base_model = tf.keras.models.load_model('/tmp/base_model')
-	#base_weights = base_model.get_weights()
-
-	autoencoder2 = linked_ae(encoding_dim, gene_num, act, init, seed, kl1, kl2)
-	print(np.shape(autoencoder2.get_weights()))
-	print(np.shape(base_weights))
-	autoencoder2.set_weights(base_weights)
-	#print(np.shape(autoencoder2.get_weights()))
+	autoencoder2 = linked_ae_ae(encoding_dim, gene_num, act, init, seed, kl1, kl2, preT=True, init_weights=base_weights)
 
 	for  layer in autoencoder2.layers[:-1]:
 		layer.trainable = False
 	autoencoder2, history2 = train_model(autoencoder2, x_train2,x_train2_noisy, epochs, seed, batch_size, lr, v)
 
-	#autoencoder2.save('/tmp/preT_model')
-
-	#for  layer in autoencoder2.layers[:-1]:
-	#	layer.trainable = True
-
-
     # save second model before fine-tuning
 	weights_tmp, b_weights_tmp = autoencoder2.get_weights()[0:2]
-	file_desc = (input_file[:-4]
+
+	file_desc = (input_file[13:-4]
 	             + post_data[16:-4]
 	             + '_seed:' + str(seed)
 				 + '_nodes:' + str(encoding_dim)
@@ -217,11 +203,10 @@ def run_model(input_file, post_data = '', seed=123, enc_dim = 300, epochs=50, kl
 	# for fine tuning, epochs and lr could be 1/5 
 	autoencoder2, history2 = train_model(autoencoder2, x_train2, x_train2_noisy, int(epochs*10), seed, batch_size, lr, v)
 
-	#autoencoder2.save('/tmp/tuned_model')
 
     # save post fine-tuned model
 	weights, b_weights = autoencoder2.get_weights()[0:2]
-	file_desc = (input_file[:-4]
+	file_desc = (input_file[13:-4]
 	             + post_data[16:-4]
 	             + '_seed:' + str(seed)
 				 + '_nodes:' + str(encoding_dim)
@@ -246,7 +231,7 @@ def run_model(input_file, post_data = '', seed=123, enc_dim = 300, epochs=50, kl
 def unlinked_ae(encoding_dim, gene_num, act, init,seed, kl1, kl2, pre_w):
 	input_img = layers.Input(shape=(gene_num,))
 	init_s = initializers.glorot_normal(seed=seed)
-	encoded = layers.Dense(encoding_dim, input_shape=(gene_num, ),
+	encoded = layers.Dense(encoding_dim, #input_img , #input_shape=(gene_num, )
 					activation=act, #sigmoid
 					#kernel_initializer = init_s,
 					kernel_initializer = init,
@@ -266,15 +251,18 @@ def unlinked_ae(encoding_dim, gene_num, act, init,seed, kl1, kl2, pre_w):
 def linked_ae_preT(encoding_dim, gene_num, act, init,seed, kl1, kl2):
 	input_img = layers.Input(shape=(gene_num,))
 	init_s = initializers.glorot_normal(seed=seed)
-	encoded = layers.Dense(encoding_dim, input_shape=(gene_num, ), activation=act,
+	encoded = layers.Dense(encoding_dim, #input_img , 
+                    activation=act, #input_shape=(gene_num, )
 					#kernel_initializer = init_s,
 					kernel_initializer = init,
 					kernel_regularizer = regularizers.l1_l2(l1=kl1, l2=kl2),
-    				activity_regularizer = regularizers.l1(0))
+    				activity_regularizer = regularizers.l1(0))#(input_img)
 
 
 	decoder = tw.TiedWeightsEncoder(input_shape=(encoding_dim,),
-					output_dim=gene_num,encoded=encoded, activation="sigmoid")
+                                    output_dim=gene_num,
+                                    encoded=encoded, 
+                                    activation="sigmoid")
 
 	autoencoder = keras.Sequential()
 	autoencoder.add(pre_w)
@@ -285,35 +273,49 @@ def linked_ae_preT(encoding_dim, gene_num, act, init,seed, kl1, kl2):
 def linked_ae(encoding_dim, gene_num, act, init,seed, kl1, kl2):
 	input_img = layers.Input(shape=(gene_num,))
 	init_s = initializers.glorot_normal(seed=seed)
-	encoded = layers.Dense(encoding_dim, input_shape=(gene_num, ), activation=act,
+	print("about to make encoded")
+	encoded = layers.Dense(encoding_dim, #input_img ,
+                    activation=act, #input_shape=(gene_num, )
 					#kernel_initializer = init_s,
 					kernel_initializer = init,
 					kernel_regularizer = regularizers.l1_l2(l1=kl1, l2=kl2),
-    				activity_regularizer = regularizers.l1(0))
+    				activity_regularizer = regularizers.l1(0))#(input_img)
 
 
-	decoder = tw.TiedWeightsEncoder(input_shape=(encoding_dim,),
-					output_dim=gene_num,encoded=encoded, activation="sigmoid")
+	print("about to call tw")
+	decoder = tw.TiedWeightsEncoder(#input_shape=(encoding_dim,),
+                                    output_dim=gene_num,
+                                    encoded=encoded, 
+                                    activation=act)#(encoded) #sigmoid
 
+	print("about to make seq")
 	autoencoder = keras.Sequential()
+	#autoencoder.add(input_img)
 	autoencoder.add(encoded)
 	autoencoder.add(decoder)
+	#autoencoder = models.Model(inputs=input_img, outputs=decoded)
 	return(autoencoder)
 
+def linked_ae_ae(encoding_dim, gene_num, act, init,seed, kl1, kl2, preT=False, init_weights=[]):
+	inputs = Input(shape=(gene_num,))
+	d = Dropout(0.1)(inputs)
+	x = DenseLayerAutoencoder([encoding_dim], activation=act, dropout=0.0,l1=0,l2=0, preT=preT, init_fun = init, act_fun = act)(d)
+	model = models.Model(inputs=inputs, outputs=x)
+	if preT:
+		print("preT ae ae")
+		model.set_weights(init_weights)
+	return(model)
 
 def prep_data(all_comp, seed):
-
 	all_comp_np = all_comp.values.astype("float64")
-	#print(np.shape(all_comp_np))
-	# this is the size of our input
 	gene_num = np.size(all_comp_np, 0)
-
 	x_train = all_comp_np.transpose()
-	#x_train = x_train.reshape((len(x_train),
-	#						   np.prod(x_train.shape[1:])))
+	# set noise factor
 	noise_factor = 0.1
+	# add noise
 	x_train_noisy = x_train + (noise_factor
 		            * np.random.normal(loc=0.0,scale=1.0, size=x_train.shape))
+	# limit to range 0-1
 	x_train_noisy = np.clip(x_train_noisy, 0., 1.)
 
 	return(x_train, x_train_noisy)
@@ -323,7 +325,6 @@ def train_model(autoencoder, x_train, x_train_noisy, epochs, seed, batch_size, l
 	np.random.seed(seed)
 	train_idxs = np.random.choice(x_train.shape[0],
 							      int(x_train.shape[0]*0.9), replace=False)
-	#print(train_idxs[1:5])
 	x_train_train = x_train[train_idxs,:]
 	x_train_test = x_train[~np.in1d(range(x_train.shape[0]),train_idxs),:]
 
@@ -331,21 +332,24 @@ def train_model(autoencoder, x_train, x_train_noisy, epochs, seed, batch_size, l
 	x_train_noise_test = x_train_noisy[~np.in1d(range(x_train.shape[0]),
 		                                              train_idxs),:]
 
-
-	#optim = optimizers.Adadelta(learning_rate=lr) # lr=0.001, rho=0.95, epsilon=1e-07
 	optim = optimizers.SGD(learning_rate=lr, momentum=.9) # lr=0.001, rho=0.95, epsilon=1e-07
-	autoencoder.compile(optimizer=optim, loss=tf.keras.losses.BinaryCrossentropy(from_logits=False)) # "mse" tf.keras.losses.BinaryCrossentropy(from_logits=False) mse
+	autoencoder.compile(optimizer=optim, 
+                        loss=tf.keras.losses.MeanSquaredError()) #BinaryCrossentropy(from_logits=False)) 
+	x_train_f = np.clip(x_train, 0., 1.).astype("float32") 
+	x_train_noisy_f = np.clip(x_train_noisy, 0., 1.).astype("float32") 
 
-	history = autoencoder.fit(x_train_noisy, x_train,
-	              	epochs=epochs,
-	                batch_size=batch_size,
-	                shuffle=True,
-	                validation_split = 0.1,
-	                #verbose=1,
-	                #validation_data=(np.array(x_train_noise_test),
-	                #				 np.array(x_train_test)),
-	                verbose=v
-	                )
+	history = autoencoder.fit(x=x_train, #_noisy_f
+                              y=x_train_noisy, #_f
+                              epochs=epochs,
+                              batch_size=batch_size,
+                              #shuffle=True,
+                              validation_split = 0.1,
+                              #verbose=1,
+                              #validation_data=(np.array(x_train_noise_test),
+                              #				 np.array(x_train_test)),
+                              verbose=v
+                             )
+	print("fitted")
 	return(autoencoder, history)
 
 
@@ -353,18 +357,13 @@ def write_data(file_desc, weights, b_weights, history):
 	"""
 	Save logs and output for a model in an outputs foolder
 	"""
-	#print(np.shape(weights))
-	np.savetxt('../outputs/weights/data_files/' + file_desc + '_en_weights_da.csv',
+	np.savetxt('../outputs/weights/' + file_desc + '_en_weights_da.csv',
 		np.matrix(weights), fmt = '%s', delimiter=',')
-	np.savetxt('../outputs/bias/data_files/' + file_desc + '_en_bias_da.csv',
+	np.savetxt('../outputs/bias/' + file_desc + '_en_bias_da.csv',
 		np.matrix(b_weights), fmt = '%s', delimiter=',')
-	#np.savetxt('../outputs/' + file_desc + '_de_weights.csv',
-	#	np.matrix(weights[2]), fmt = '%s', delimiter=',')
-	#np.savetxt('../outputs/' + file_desc + '_de_bias.csv',
-#		np.matrix(weights[3]), fmt = '%s', delimiter=',')
-	np.savetxt('../outputs/loss/data_files//' + file_desc + '_loss_da.csv',
+	np.savetxt('../outputs/loss/' + file_desc + '_loss_da.csv',
 		np.matrix(history.history['loss']), fmt = '%s', delimiter=',')
-	np.savetxt('../outputs/val_loss/data_files/' + file_desc + '_val_loss_da.csv',
+	np.savetxt('../outputs/val_loss/' + file_desc + '_val_loss_da.csv',
 		np.matrix(history.history['val_loss']), fmt = '%s', delimiter=',')
 
 
@@ -373,5 +372,4 @@ if __name__ == '__main__':
 		parser.add_argument('filename',type=str, nargs=1,
 			help='filpath to training set.')
 		args=parser.parse_args()
-		#print(args.filename[0])
 		run_model(args.filename[0])
