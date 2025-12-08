@@ -1,0 +1,23 @@
+#!/bin/bash
+
+#SBATCH -J e_const
+#SBATCH -o mpi_%j.txt
+#SBATCH -e mpi_%j.err
+#SBATCH --mail-type=END,FAIL
+##SBATCH --cpus-per-task=1
+#SBATCH --mem=128G
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --time=020:00:00
+
+#export OMP_NUM_THREADS=6
+#cd ~/seqADAGE/ensemble_construction/
+
+ensemble_folder="/work/gd134/adage_models/ensemble_models"
+data_compendium="../data_files/sepi_pan_genome_log_counts_norm_02.csv"
+model_size=300
+scratch_folder='/work/gd134/scratch'
+
+srun -n 1 Rscript ensemble_construction_p.R $data_compendium \
+/work/gd134/adage_models/$model_size/ $scratch_folder $model_size \
+660 735 1 weighted $ensemble_folder /work/gd134/net${model_size}_weighted_cor.txt;

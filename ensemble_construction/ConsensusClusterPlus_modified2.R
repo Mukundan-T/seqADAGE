@@ -28,8 +28,9 @@ ConsensusClusterPlus.M <- function( d=NULL,
 
 
   if(is.null(ml)==TRUE){
+    print(class(d[1]))
 
-    if ( ! class( d ) %in% c( "dist", "matrix", "ExpressionSet" ) ) {
+    if ( ! (class( d )[1] %in% c( "dist", "matrix", "ExpressionSet" )) ) {
       stop("d must be a matrix, distance object or ExpressionSet (eset object)")
     }
 
@@ -108,7 +109,7 @@ ConsensusClusterPlus.M <- function( d=NULL,
     message("clustered")
     ct = cutree(hc,oneK[tk-1])
     names(ct) = colnames(d)
-    if(class(d)=="dist"){
+    if(class(d)[1]=="dist"){
       names(ct) = colnames(as.matrix(d))
     }
     c = fm
