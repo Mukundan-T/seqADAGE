@@ -1,0 +1,643 @@
+---
+title: "Pangenome compendia and models"
+output: powerpoint_presentation
+date: "2025-07-03"
+---
+
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  dev = "png",
+  dpi = 300,
+  fig.width = 5,
+  fig.height = 4
+)
+```
+
+```{r, warning=F, message=F, include=F}
+library(librarian)
+shelf(KEGGREST, 
+      EnrichmentBrowser,
+      ComplexHeatmap,
+      circlize,
+      RColorBrewer,
+      DESeq2,
+      dplyr,
+      corrplot,
+      ggplot2,
+      stringr,
+      readr,
+      ggprism,
+      reshape2,
+      ggpubr,
+      WGCNA,
+      ica,
+      gmodels)
+#library(KEGGREST)
+#library(EnrichmentBrowser)
+#library(ComplexHeatmap)
+#library(circlize)
+#library(RColorBrewer)
+#library(DESeq2)
+#library(dplyr)
+#library(corrplot)
+#library(ggplot2)
+```
+
+
+
+## Load Compendia data
+
+```{r}
+comp_files_all <- list.files('./compendia/', pattern = "*_log_counts_norm_01.csv")
+comp_files <- comp_files_all[-c(17,20)]
+comp_files <- comp_files_all[c(1,17,21)]
+comp_dfs <-lapply(comp_files, function(x){
+  c <- read.csv(paste0("./compendia/",x), stringsAsFactors = F)
+  c$X <- paste0("Feature:",c$X)
+  c[is.na(c)] <- 0
+  c
+})
+
+names(comp_dfs) <- str_extract(comp_files, "([a-zA-Z_]+)(_log_counts_norm_01.csv)", group = 1)
+
+t <- lapply(names(comp_dfs), function(x){
+  print(x)
+  m <- comp_dfs[[x]]
+  print(dim(m))
+  head(m[,1], n=10)
+})
+```
+
+## Load DAE models
+
+```{r}
+
+dae_files_all <- list.files('../outputs/weights/', pattern = "saur_pan_genome_BLAST_trimmed_log_counts_norm_01pi_pan_genome_log_counts_norm_01_seed:571*")
+dae_files <- dae_files_all[str_detect(dae_files_all, "ep:50") & str_detect(dae_files_all, "act:relu")]
+dae_files <- dae_files[c(1,3)]
+dae_dfs <-lapply(dae_files, function(x){
+  c <- read.csv(paste0("../outputs/weights/",x), stringsAsFactors = F,
+                         header = F)
+  #rownames(c) <- paste0("Feature:",comp_dfs[["sepi_pan_genome"]]$X)
+  rownames(c) <- comp_dfs[["sepi_pan_genome"]]$X
+  c[is.na(c)] <- 0
+  c
+})
+
+names(dae_dfs) <- paste(paste(str_extract(dae_files, "(prew:_)([prepostFTP]*)(_en_weights_da.csv)", group = 2),
+                        str_extract(dae_files, "(kl1:[01])", group = 1), sep = "_"),
+                        str_extract(dae_files, "(init:glorot_)([normaluniform]*)", group = 2), sep = "_")
+
+t <- lapply(names(dae_dfs), function(x){
+  print(x)
+  m <- dae_dfs[[x]]
+  print(dim(m))
+  #head(m[,2], n=10)
+})
+
+
+
+
+```
+
+
+## PCA
+
+```{r}
+pca_files_all <- list.files('/work/gd134/pca_comp/', pattern = "*_log_counts_norm_01_pca.csv")
+pca_files <- pca_files_all
+pca_dfs <-lapply(pca_files, function(x){
+  c <- read.csv(paste0("/work/gd134/pca_comp/",x), stringsAsFactors = F)
+  c$X <- paste0("Feature:",c$X)
+  c[is.na(c)] <- 0
+  c
+})
+
+names(pca_dfs) <- str_extract(pca_files, "([a-zA-Z_]+)(_log_counts_norm_01_pca.csv)", group = 1)
+
+t <- lapply(names(pca_dfs), function(x){
+  print(x)
+  m <- pca_dfs[[x]]
+  print(dim(m))
+  head(m[,1], n=10)
+})
+```
+
+
+
+
+## ICA
+
+```{r}
+comp_files_all <- list.files('./compendia/', pattern = "*_log_counts_norm_01.csv")
+comp_files <- comp_files_all[-c(17,20)]
+comp_files <- comp_files_all[c(1,17,21)]
+comp_dfs <-lapply(comp_files, function(x){
+  c <- read.csv(paste0("./compendia/",x), stringsAsFactors = F)
+  c$X <- paste0("Feature:",c$X)
+  c[is.na(c)] <- 0
+  c
+})
+
+names(comp_dfs) <- str_extract(comp_files, "([a-zA-Z_]+)(_log_counts_norm_01.csv)", group = 1)
+
+t <- lapply(names(comp_dfs), function(x){
+  print(x)
+  m <- comp_dfs[[x]]
+  print(dim(m))
+  head(m[,1], n=10)
+})
+```
+
+## Corr matrices
+
+
+
+
+
+
+
+## Load operons
+
+
+```{r}
+# read in sepi_pan_KEGG_format.txt and  saur_pan_KEGG_format.txt
+```
+
+
+
+## Operon correlations
+
+```{r}
+se_operon_pca_corrs <- lapply(names(comp_dfs), function(x){
+  print(x)
+  c <- comp_dfs[[x]]
+  rnames <- str_extract(c$X, "(Feature:)([a-zA-Z0-9_]+)", group = 2)
+  pca_cs <- comp_pca_corrs[[x]]
+  colnames(pca_cs) <- rnames
+  rownames(pca_cs) <- rnames
+  by_op <- lapply(se_opes_first_name, function(y){
+    op_names <- rnames[rnames %in% y]
+    median(pca_cs[op_names, op_names])
+  })
+  by_op
+})
+names(se_operon_pca_corrs) <- names(comp_dfs)
+```
+
+
+
+```{r}
+se_operon_pca350_corrs <- lapply(names(comp_dfs), function(x){
+  print(x)
+  c <- comp_dfs[[x]]
+  rnames <- str_extract(c$X, "(Feature:)([a-zA-Z0-9_]+)", group = 2)
+  pca_cs <- comp_pca350_corrs[[x]]
+  colnames(pca_cs) <- rnames
+  rownames(pca_cs) <- rnames
+  by_op <- lapply(se_opes_first_name, function(y){
+    op_names <- rnames[rnames %in% y]
+    median(pca_cs[op_names, op_names])
+  })
+  by_op
+})
+names(se_operon_pca350_corrs) <- names(comp_dfs)
+```
+
+
+
+```{r}
+se_operon_comp_corrs <- lapply(names(comp_dfs), function(x){
+  print(x)
+  c <- comp_dfs[[x]]
+  rnames <- str_extract(c$X, "(Feature:)([a-zA-Z0-9_]+)", group = 2)
+  pca_cs <- comp_corrs[[x]]
+  colnames(pca_cs) <- rnames
+  rownames(pca_cs) <- rnames
+  by_op <- lapply(se_opes_first_name, function(y){
+    op_names <- rnames[rnames %in% y]
+    #print(op_names)
+    median(pca_cs[op_names, op_names], na.rm=T)
+  })
+  by_op
+})
+names(se_operon_comp_corrs) <- names(comp_dfs)
+```
+
+```{r}
+sa_operon_comp_corrs <- lapply(names(comp_dfs), function(x){
+  print(x)
+  c <- comp_dfs[[x]]
+  rnames <- str_extract(c$X, "(Feature:)([a-zA-Z0-9_]+)", group = 2)
+  pca_cs <- comp_corrs[[x]]
+  colnames(pca_cs) <- rnames
+  rownames(pca_cs) <- rnames
+  by_op <- lapply(sa_opes_first_name, function(y){
+    op_names <- rnames[rnames %in% y]
+    median(pca_cs[op_names, op_names], na.rm=T)
+  })
+  by_op
+})
+names(sa_operon_comp_corrs) <- names(comp_dfs)
+```
+
+
+```{r}
+sa_operon_pca_corrs <- lapply(names(comp_dfs), function(x){
+  print(x)
+  c <- comp_dfs[[x]]
+  rnames <- str_extract(c$X, "(Feature:)([a-zA-Z0-9_]+)", group = 2)
+  pca_cs <- comp_pca_corrs[[x]]
+  colnames(pca_cs) <- rnames
+  rownames(pca_cs) <- rnames
+  by_op <- lapply(sa_opes_first_name, function(y){
+    op_names <- rnames[rnames %in% y]
+    median(pca_cs[op_names, op_names])
+  })
+  by_op
+})
+names(sa_operon_pca_corrs) <- names(comp_dfs)
+```
+
+
+```{r}
+sa_operon_ica_corrs <- lapply(names(comp_dfs), function(x){
+  print(x)
+  c <- comp_dfs[[x]]
+  rnames <- str_extract(c$X, "(Feature:)([a-zA-Z0-9_]+)", group = 2)
+  pca_cs <- comp_ica_corrs[[x]]
+  colnames(pca_cs) <- rnames
+  rownames(pca_cs) <- rnames
+  by_op <- lapply(sa_opes_first_name, function(y){
+    op_names <- rnames[rnames %in% y]
+    median(pca_cs[op_names, op_names])
+  })
+  by_op
+})
+names(sa_operon_ica_corrs) <- names(comp_dfs)
+```
+
+
+```{r}
+se_operon_ica_corrs <- lapply(names(comp_dfs), function(x){
+  print(x)
+  c <- comp_dfs[[x]]
+  rnames <- str_extract(c$X, "(Feature:)([a-zA-Z0-9_]+)", group = 2)
+  pca_cs <- comp_ica_corrs[[x]]
+  colnames(pca_cs) <- rnames
+  rownames(pca_cs) <- rnames
+  by_op <- lapply(se_opes_first_name, function(y){
+    op_names <- rnames[rnames %in% y]
+    median(pca_cs[op_names, op_names])
+  })
+  by_op
+})
+names(se_operon_ica_corrs) <- names(comp_dfs)
+```
+
+
+```{r}
+se_operon_ica350_corrs <- lapply(names(comp_dfs), function(x){
+  print(x)
+  c <- comp_dfs[[x]]
+  rnames <- str_extract(c$X, "(Feature:)([a-zA-Z0-9_]+)", group = 2)
+  pca_cs <- comp_ica350_corrs[[x]]
+  colnames(pca_cs) <- rnames
+  rownames(pca_cs) <- rnames
+  by_op <- lapply(se_opes_first_name, function(y){
+    op_names <- rnames[rnames %in% y]
+    median(pca_cs[op_names, op_names])
+  })
+  by_op
+})
+names(se_operon_ica350_corrs) <- names(comp_dfs)
+```
+
+
+```{r}
+se_operon_dae_corrs <- lapply(names(dae_dfs), function(x){
+  print(x)
+  c <- dae_dfs[[x]]
+  rnames <- str_extract(rownames(c), "(Feature:)([a-zA-Z0-9_]+)", group = 2)
+  pca_cs <- dae_corrs[[x]]
+  colnames(pca_cs) <- rnames
+  rownames(pca_cs) <- rnames
+  by_op <- lapply(se_opes_first_name, function(y){
+    op_names <- rnames[rnames %in% y]
+    median(pca_cs[op_names, op_names], na.rm=T)
+  })
+  by_op
+})
+names(se_operon_dae_corrs) <- names(dae_dfs)
+```
+
+```{r}
+se_operon_pca_corrs_df <- data.frame(lapply(se_operon_pca_corrs, function(x) unlist(x)))
+se_operon_pca_corrs_df_m <- melt(se_operon_pca_corrs_df)
+se_operon_pca_corrs_df_m$red_dum <- "PCA"
+se_operon_pca_corrs_df_m$species_opeon <- "Se"
+
+se_operon_ica_corrs_df <- data.frame(lapply(se_operon_ica_corrs, function(x) unlist(x)))
+se_operon_ica_corrs_df_m <- melt(se_operon_ica_corrs_df)
+se_operon_ica_corrs_df_m$red_dum <- "ICA"
+se_operon_ica_corrs_df_m$species_opeon <- "Se"
+
+
+se_operon_pca350_corrs_df <- data.frame(lapply(se_operon_pca350_corrs, function(x) unlist(x)))
+se_operon_pca350_corrs_df_m <- melt(se_operon_pca350_corrs_df)
+se_operon_pca350_corrs_df_m$red_dum <- "PCA350"
+se_operon_pca350_corrs_df_m$species_opeon <- "Se"
+
+se_operon_ica350_corrs_df <- data.frame(lapply(se_operon_ica350_corrs, function(x) unlist(x)))
+se_operon_ica350_corrs_df_m <- melt(se_operon_ica350_corrs_df)
+se_operon_ica350_corrs_df_m$red_dum <- "ICA350"
+se_operon_ica350_corrs_df_m$species_opeon <- "Se"
+
+
+se_operon_dae_corrs_df <- data.frame(lapply(se_operon_dae_corrs, function(x) unlist(x)))
+se_operon_dae_corrs_df_m <- melt(se_operon_dae_corrs_df)
+se_operon_dae_corrs_df_m$red_dum <- "DAE"
+se_operon_dae_corrs_df_m$species_opeon <- "Se"
+
+
+
+
+
+
+se_operon_comp_corrs_df <- data.frame(lapply(se_operon_comp_corrs, function(x) unlist(x)))
+se_operon_comp_corrs_df_m <- melt(se_operon_comp_corrs_df)
+se_operon_comp_corrs_df_m$red_dum <- "COMP"
+se_operon_comp_corrs_df_m$species_opeon <- "Se"
+
+
+se_operon_corrs_df_m <- rbind(rbind(rbind(se_operon_pca_corrs_df_m,se_operon_ica_corrs_df_m),
+                              se_operon_dae_corrs_df_m),
+                              se_operon_comp_corrs_df_m)
+                              
+```
+
+
+```{r,, fig.width=12, fig.height = 10 }
+plot_temp <- se_operon_pca_corrs_df_m[!is.na(se_operon_pca_corrs_df_m$value),]
+plot_temp <- se_operon_corrs_df_m
+
+variable_order <- tapply(plot_temp$value, plot_temp$variable, FUN = function(x) mean(x, na.rm=T))
+
+plot_temp$variable <- factor(plot_temp$variable, levels = names(sort(variable_order)))
+
+g <- ggplot(plot_temp , aes(x = variable, y = value, color = red_dum)) +
+    geom_point(alpha = 0.3, position = position_jitterdodge()) +
+  geom_boxplot() + 
+  #facet_grid(.~red_dum) +
+  theme_prism(axis_text_angle = 45)
+g
+
+#ggsave("plots/pca_op_corrs.png")
+```
+
+
+
+
+```{r,, fig.width=12, fig.height = 10 }
+plot_temp <- se_operon_pca350_corrs_df_m[!is.na(se_operon_pca350_corrs_df_m$value),]
+
+variable_order <- tapply(plot_temp$value, plot_temp$variable, FUN = function(x) mean(x, na.rm=T))
+
+plot_temp$variable <- factor(plot_temp$variable, levels = names(sort(variable_order)))
+
+g <- ggplot(plot_temp , aes(x = variable, y = value)) +
+    geom_jitter(alpha = 0.3) +
+  geom_boxplot() + 
+  #facet_grid(.~red_dum) +
+  theme_prism(axis_text_angle = 45)
+g
+
+#ggsave("plots/pca350_op_corrs.png")
+```
+
+
+
+
+
+```{r,, fig.width=12, fig.height = 10 }
+plot_temp <- se_operon_ica_corrs_df_m[!is.na(se_operon_ica_corrs_df_m$value),]
+
+variable_order <- tapply(plot_temp$value, plot_temp$variable, FUN = function(x) mean(x, na.rm=T))
+
+plot_temp$variable <- factor(plot_temp$variable, levels = names(sort(variable_order)))
+
+g <- ggplot(plot_temp , aes(x = variable, y = value)) +
+    geom_jitter(alpha = 0.3) +
+  geom_boxplot() + 
+  #facet_grid(.~red_dum) +
+  theme_prism(axis_text_angle = 45)
+g
+
+#ggsave("plots/ica_op_corrs.png")
+```
+
+
+
+```{r,, fig.width=12, fig.height = 10 }
+plot_temp <- se_operon_ica350_corrs_df_m[!is.na(se_operon_ica350_corrs_df_m$value),]
+
+variable_order <- tapply(plot_temp$value, plot_temp$variable, FUN = function(x) mean(x, na.rm=T))
+
+plot_temp$variable <- factor(plot_temp$variable, levels = names(sort(variable_order)))
+
+g <- ggplot(plot_temp , aes(x = variable, y = value)) +
+    geom_jitter(alpha = 0.3) +
+  geom_boxplot() + 
+  #facet_grid(.~red_dum) +
+  theme_prism(axis_text_angle = 45)
+g
+
+#ggsave("plots/ica350_op_corrs.png")
+```
+
+
+
+```{r,, fig.width=12, fig.height = 10 }
+plot_temp <- se_operon_dae_corrs_df_m[!is.na(se_operon_dae_corrs_df_m$value),]
+
+variable_order <- tapply(plot_temp$value, plot_temp$variable, FUN = function(x) mean(x, na.rm=T))
+
+plot_temp$variable <- factor(plot_temp$variable, levels = names(sort(variable_order)))
+
+g <- ggplot(plot_temp , aes(x = variable, y = value)) +
+    geom_jitter(alpha = 0.3) +
+  geom_boxplot() + 
+  #facet_grid(.~red_dum) +
+  theme_prism(axis_text_angle = 45)
+g
+
+#ggsave("plots/compendia_op_corrs.png")
+```
+
+
+
+```{r,, fig.width=12, fig.height = 10 }
+plot_temp <- se_operon_comp_corrs_df_m[!is.na(se_operon_comp_corrs_df_m$value),]
+
+variable_order <- tapply(plot_temp$value, plot_temp$variable, FUN = function(x) mean(x, na.rm=T))
+
+plot_temp$variable <- factor(plot_temp$variable, levels = names(sort(variable_order)))
+
+g <- ggplot(plot_temp , aes(x = variable, y = value)) +
+    geom_jitter(alpha = 0.3) +
+  geom_boxplot() + 
+  #facet_grid(.~red_dum) +
+  theme_prism(axis_text_angle = 45)
+g
+
+ggsave("plots/compendia_op_corrs.png")
+```
+
+
+
+
+## select
+
+
+```{r,, fig.width=8, fig.height = 8 }
+plot_temp <- se_operon_comp_corrs_df_m[!is.na(se_operon_comp_corrs_df_m$value),]
+plot_temp <- plot_temp[plot_temp$variable %in% c('sepi_pan_genome_', 'saur_pan_genome_RAND_', 'sepi_pan_genome_RAND_',
+                                                 'saur_pan_genome_CROSS_RAND_','saur_pan_genome_BLAST_with_rand_',
+                                                 'saur_pan_genome_FLDSKEXH_with_rand_'
+                                                 ),]
+variable_order <- tapply(plot_temp$value, plot_temp$variable, FUN = function(x) mean(x, na.rm=T))
+
+plot_temp$variable <- factor(plot_temp$variable, levels = c('sepi_pan_genome_RAND_', 'saur_pan_genome_RAND_', 
+                                                 'saur_pan_genome_CROSS_RAND_','saur_pan_genome_BLAST_with_rand_',
+                                                 'saur_pan_genome_FLDSKEXH_with_rand_', 'sepi_pan_genome_'
+                                                 ))
+
+g <- ggplot(plot_temp , aes(x = variable, y = value, color = variable)) +
+    geom_jitter(alpha = 0.3, width = 0.3) +
+  geom_boxplot(alpha = 0.5) + 
+  scale_color_brewer(palette = "Spectral", guide = "none") +
+  #facet_grid(.~red_dum) +
+  stat_compare_means(label = "p.signif", method = "t.test",
+                     ref.group = "sepi_pan_genome_RAND_", label.y = 1.1)  +
+  theme_prism(axis_text_angle = 45)
+g
+
+#ggsave("plots/compendia_op_corrs_select.png")
+```
+
+
+
+
+```{r,, fig.width=8, fig.height = 8 }
+plot_temp <- se_operon_pca_corrs_df_m[!is.na(se_operon_pca_corrs_df_m$value),]
+plot_temp <- plot_temp[plot_temp$variable %in% c('sepi_pan_genome_', 'saur_pan_genome_RAND_', 'sepi_pan_genome_RAND_',
+                                                 'saur_pan_genome_CROSS_RAND_','saur_pan_genome_BLAST_with_rand_',
+                                                 'saur_pan_genome_FLDSKEXH_with_rand_'
+                                                 ),]
+variable_order <- tapply(plot_temp$value, plot_temp$variable, FUN = function(x) mean(x, na.rm=T))
+
+plot_temp$variable <- factor(plot_temp$variable, levels = c('sepi_pan_genome_RAND_', 'saur_pan_genome_RAND_', 
+                                                 'saur_pan_genome_CROSS_RAND_','saur_pan_genome_BLAST_with_rand_',
+                                                 'saur_pan_genome_FLDSKEXH_with_rand_', 'sepi_pan_genome_'
+                                                 ))
+
+g <- ggplot(plot_temp , aes(x = variable, y = value, color = variable)) +
+    geom_jitter(alpha = 0.3, width = 0.3) +
+  geom_boxplot(alpha = 0.5) + 
+  #facet_grid(.~red_dum) +
+  scale_color_brewer(palette = "Spectral", guide = "none") +
+  stat_compare_means(label = "p.signif", method = "t.test",
+                     ref.group = "sepi_pan_genome_RAND_", label.y = 1.1)  +
+  theme_prism(axis_text_angle = 45)
+g
+
+ggsave("plots/pca_op_corrs_select.png")
+```
+
+
+
+
+```{r,, fig.width=8, fig.height = 8 }
+plot_temp <- se_operon_ica_corrs_df_m[!is.na(se_operon_ica_corrs_df_m$value),]
+plot_temp <- plot_temp[plot_temp$variable %in% c('sepi_pan_genome_', 'saur_pan_genome_RAND_', 'sepi_pan_genome_RAND_',
+                                                 'saur_pan_genome_CROSS_RAND_','saur_pan_genome_BLAST_with_rand_',
+                                                 'saur_pan_genome_FLDSKEXH_with_rand_'
+                                                 ),]
+variable_order <- tapply(plot_temp$value, plot_temp$variable, FUN = function(x) mean(x, na.rm=T))
+
+plot_temp$variable <- factor(plot_temp$variable, levels = c('sepi_pan_genome_RAND_', 'saur_pan_genome_RAND_', 
+                                                 'saur_pan_genome_CROSS_RAND_','saur_pan_genome_BLAST_with_rand_',
+                                                 'saur_pan_genome_FLDSKEXH_with_rand_', 'sepi_pan_genome_'
+                                                 ))
+
+g <- ggplot(plot_temp , aes(x = variable, y = value, color = variable)) +
+    geom_jitter(alpha = 0.3, width = 0.3) +
+  geom_boxplot(alpha = 0.5) + 
+  #facet_grid(.~red_dum) +
+  scale_color_brewer(palette = "Spectral", guide = "none") +
+  stat_compare_means(label = "p.signif", method = "t.test",
+                     ref.group = "sepi_pan_genome_RAND_", label.y = 1.1)  +
+  theme_prism(axis_text_angle = 45)
+g
+
+ggsave("plots/ica_op_corrs_select.png")
+```
+
+
+```{r,, fig.width=24, fig.height = 8 }
+plot_temp_comp <- se_operon_comp_corrs_df_m[!is.na(se_operon_comp_corrs_df_m$value),]
+plot_temp_comp$method <- "norm_gene_exp"
+plot_temp_pca <- se_operon_pca_corrs_df_m[!is.na(se_operon_pca_corrs_df_m$value),]
+plot_temp_pca$method <- "pca"
+plot_temp_ica <- se_operon_ica_corrs_df_m[!is.na(se_operon_ica_corrs_df_m$value),]
+plot_temp_ica$method <- "ica"
+
+
+plot_temp <- rbind(rbind(plot_temp_comp, plot_temp_pca, plot_temp_ica))
+plot_temp$method <- factor(plot_temp$method, levels = c("norm_gene_exp","pca","ica"))
+
+plot_temp <- plot_temp[plot_temp$variable %in% c('sepi_pan_genome_', 'saur_pan_genome_RAND_', 'sepi_pan_genome_RAND_',
+                                                 'saur_pan_genome_CROSS_RAND_','saur_pan_genome_BLAST_with_rand_',
+                                                 'saur_pan_genome_FLDSKEXH_with_rand_'
+                                                 ),]
+variable_order <- tapply(plot_temp$value, plot_temp$variable, FUN = function(x) mean(x, na.rm=T))
+
+plot_temp$variable <- factor(plot_temp$variable, levels = c('sepi_pan_genome_RAND_', 'saur_pan_genome_RAND_', 
+                                                 'saur_pan_genome_CROSS_RAND_','saur_pan_genome_BLAST_with_rand_',
+                                                 'saur_pan_genome_FLDSKEXH_with_rand_', 'sepi_pan_genome_'
+                                                 ))
+
+g <- ggplot(plot_temp , aes(x = variable, y = value, fill = method, color = method)) +
+    geom_point(alpha = 0.3, position = position_jitterdodge()) +
+  geom_boxplot(alpha = 0.5) + 
+  facet_grid(.~variable, scales = "free") +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  stat_compare_means(label = "p.signif", aes(group = method), method = "anova",paired = T,
+                      label.y = 1.1)  +
+  theme_prism(axis_text_angle = 45)
+g
+
+ggsave("plots/combined_op_corrs_select.png")
+```
+
+
+## KEGG paths
+
+```{r}
+# read in sepi_pan_KEGG_format.txt and  saur_pan_KEGG_format.txt
+```
+
+
+
+
+
+
+
+
+

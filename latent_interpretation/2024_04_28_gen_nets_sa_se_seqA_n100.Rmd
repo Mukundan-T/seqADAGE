@@ -1,0 +1,1207 @@
+---
+title: "2024_04_28_gen_nets_sa_se_seqA_n100"
+output: powerpoint_presentation
+date: "2024-04-28"
+---
+
+# Setup
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  dev = "png",
+  dpi = 600,
+  fig.width = 5,
+  fig.height = 4
+)
+```
+
+```{r, warning=F, message=F, include=F}
+library(librarian)
+shelf(KEGGREST, 
+      EnrichmentBrowser,
+#      ComplexHeatmap,
+#      circlize,
+#      RColorBrewer,
+#      DESeq2,
+      dplyr,
+      stringr,
+      corrplot,
+      XML,
+      xml2,
+      tidyr,
+      dendextend,
+      GGally,
+      reshape2,
+      igraph,
+      RColorBrewer,
+      gridExtra,
+      ggplot2)
+#library(KEGGREST)
+#library(EnrichmentBrowser)
+#library(ComplexHeatmap)
+#library(circlize)
+#library(RColorBrewer)
+#library(DESeq2)
+#library(dplyr)
+#library(corrplot)
+#library(ggplot2)
+```
+
+# Load data and models
+
+
+```{r}
+
+# compendia
+sa_comp <- read.csv('../data_files/sa_NCTC3825_filt_norm_log_01.csv')
+
+rownames(sa_comp) <- sa_comp$X
+se_names <- read.csv('pandb_b_1282_gene_names.csv',
+                     stringsAsFactors = F)
+rownames(se_names) <- make.unique(se_names$X1)
+
+sa_comp_mapped <- read.csv('../data_files/prev/sepandb1282_MAPPED_sa_NCTC3825_filt_norm_log_01.csv')
+
+se_names_ordered <- se_names[sa_comp_mapped$X,'X2']
+se_names_ordered[is.na(se_names_ordered)] <- sa_comp_mapped$X[is.na(se_names_ordered)]
+
+
+
+rownames(sa_comp_mapped) <- se_names_ordered
+
+se_comp <- read.csv('../data_files/prev/se_pandb1282_epi_comp_log_counts_norm_01.csv')
+rownames(se_comp) <- se_names_ordered
+
+# TL models
+
+postPT_model <- read.csv('../outputs/weights/prev/data_files/sepandb1282_MAPPED_sa_NCTC3825_filt_norm_log_01_pandb1282_epi_comp_log_counts_norm_01_seed:571_nodes:50_kl1:0_kl2:0_act:relu_init:glorot_normal_ep:10_tied:True_batch:10_lr:0.05_prew:_postPT_en_weights_da.csv',
+                         stringsAsFactors = F,
+                         header = F)
+rownames(postPT_model) <- se_names_ordered
+
+
+
+postFT_model <- read.csv('../outputs/weights/prev/data_files/sepandb1282_MAPPED_sa_NCTC3825_filt_norm_log_01_pandb1282_epi_comp_log_counts_norm_01_seed:571_nodes:50_kl1:0_kl2:0_act:relu_init:glorot_normal_ep:10_tied:True_batch:10_lr:0.05_prew:_postFT_en_weights_da.csv',
+                         stringsAsFactors = F,
+                         header = F)
+rownames(postFT_model) <- se_names_ordered
+
+preFT_model <- read.csv('../outputs/weights/prev/data_files/sepandb1282_MAPPED_sa_NCTC3825_filt_norm_log_01_pandb1282_epi_comp_log_counts_norm_01_seed:571_nodes:50_kl1:0_kl2:0_act:relu_init:glorot_normal_ep:10_tied:True_batch:10_lr:0.05_prew:_preFT_en_weights_da.csv',
+                         stringsAsFactors = F,
+                         header = F)
+rownames(preFT_model) <- se_names_ordered
+
+
+postPTctrl_model <- read.csv('../outputs/weights/prev/data_files/se_pandb1282_epi_comp_log_counts_norm_01_pandb1282_epi_comp_log_counts_norm_01_seed:571_nodes:50_kl1:0_kl2:0_act:relu_init:glorot_normal_ep:10_tied:True_batch:10_lr:0.05_prew:_postPT_en_weights_da.csv',
+                         stringsAsFactors = F,
+                         header = F)
+rownames(postPTctrl_model) <- se_names_ordered
+
+
+postFTctrl_model <- read.csv('../outputs/weights/prev/data_files/se_pandb1282_epi_comp_log_counts_norm_01_pandb1282_epi_comp_log_counts_norm_01_seed:571_nodes:50_kl1:0_kl2:0_act:relu_init:glorot_normal_ep:10_tied:True_batch:10_lr:0.05_prew:_postFT_en_weights_da.csv',
+                         stringsAsFactors = F,
+                         header = F)
+rownames(postFTctrl_model) <- se_names_ordered
+
+preFTctrl_model <- read.csv('../outputs/weights/prev/data_files/se_pandb1282_epi_comp_log_counts_norm_01_pandb1282_epi_comp_log_counts_norm_01_seed:571_nodes:50_kl1:0_kl2:0_act:relu_init:glorot_normal_ep:10_tied:True_batch:10_lr:0.05_prew:_preFT_en_weights_da.csv',
+                         stringsAsFactors = F,
+                         header = F)
+rownames(preFTctrl_model) <- se_names_ordered
+
+
+# original models
+  seONLY_model <- read.csv('../outputs/weights/prev/data_files/se_pandb1282_epi_comp_log_counts_norm_01_seed:571_nodes:50_kl1:0_kl2:0_act:relu_init:glorot_normal_ep:100_tied:True_batch:10_lr:0.05_en_weights_da.csv',
+                         stringsAsFactors = F,
+                         header = F)
+rownames(seONLY_model) <- se_names_ordered
+
+
+saONLY_model <- read.csv('../outputs/weights/prev/data_files/sepandb1282_MAPPED_sa_NCTC3825_filt_norm_log_01_seed:571_nodes:50_kl1:0_kl2:0_act:relu_init:glorot_normal_ep:100_tied:True_batch:10_lr:0.05_en_weights_da.csv',
+                         stringsAsFactors = F,
+                         header = F)
+rownames(saONLY_model) <- se_names_ordered
+
+```
+
+# Load loss file
+
+```{r}
+
+
+```
+
+
+
+# Load annotations and KEGG pathways
+
+```{r}
+
+se1282_kegg <- read.csv('../node_interpretation/se1282_KEGG_format.txt',
+                 stringsAsFactors = F,
+                 sep = '\t')
+rownames(se1282_kegg) <- se1282_kegg$KEGGPathID
+
+se16_kegg <- read.csv('../node_interpretation/se16_KEGG_format.txt',
+                 stringsAsFactors = F,
+                 sep = '\t')
+rownames(se16_kegg) <- se16_kegg$KEGGPathID
+
+saNCTC8325_kegg <- read.csv('../node_interpretation/saNCTC8325_KEGG_format.txt',
+                 stringsAsFactors = F,
+                 sep = '\t')
+rownames(saNCTC8325_kegg) <- saNCTC8325_kegg$KEGGPathID
+```
+
+```{r}
+
+seTU_annotations <- read.csv('Tu3298.gff3', 
+                             stringsAsFactors = F,
+                             skip = 5,
+                             sep = '\t',
+                             header=F)
+seTU_annotations <- seTU_annotations[seTU_annotations$V3 == "CDS",]
+
+seTU_ann_tag2name <- data.frame(
+  locus_tag = sapply(seTU_annotations$V9, 
+                            function(x) sub('ID=','',
+                                            str_extract(x, 'ID=Tu3298_[0-9]*'))),
+  gene_symbol = sapply(seTU_annotations$V9, 
+                            function(x) sub('Name=','',
+                                            str_extract(x, 'Name=[a-zA-Z0-9_]*'))),
+  product = sapply(seTU_annotations$V9, 
+                            function(x) sub('product=','',
+                                            str_extract(x, 'product=[a-zA-Z0-9_ -//(\\[ ]*')))
+)
+seTU_ann_tag2name <- seTU_ann_tag2name[!is.na(seTU_ann_tag2name$product),]
+rownames(seTU_ann_tag2name) <- make.unique(seTU_ann_tag2name$locus_tag)
+
+
+se16_annotations <- read.csv('seNIHLM067.gff', 
+                             stringsAsFactors = F,
+                             skip = 52,
+                             sep = '\t',
+                             header=F)
+
+se16_ann_tag2name <- data.frame(
+  locus_tag = sapply(se16_annotations$V9, 
+                            function(x) sub('locus_tag=','',
+                                            str_extract(x, 'locus_tag=SE16__[0-9]*'))),
+  gene_symbol = sapply(se16_annotations$V9, 
+                            function(x) sub('Name=','',
+                                            str_extract(x, 'Name=[a-zA-Z0-9_]*'))),
+  product = sapply(se16_annotations$V9, 
+                            function(x) sub('product=','',
+                                            str_extract(x, 'product=[a-zA-Z0-9_ -]*')))
+)
+se16_ann_tag2name <- se16_ann_tag2name[!is.na(se16_ann_tag2name$product),]
+rownames(se16_ann_tag2name) <- se16_ann_tag2name$locus_tag
+
+
+
+saNCTC8325_annotations <- read.csv('NCTC8325.gff3', 
+                             stringsAsFactors = F,
+                             skip = 2,
+                             header=F,
+                             sep = '\t')
+
+saNCTC8325_ann_tag2name <- data.frame(
+  locus_tag = sapply(saNCTC8325_annotations$V9, 
+                            function(x) sub('locus_tag=','',
+                                            str_extract(x, 'locus_tag=SAOUHSC_[0-9Tp]*'))),
+  gene_symbol = sapply(saNCTC8325_annotations$V9, 
+                            function(x) sub('Name=','',
+                                            str_extract(x, 'Name=[a-zA-Z0-9_]*')))
+)
+
+saNCTC8325_ann_name2product <- data.frame(
+  gene_symbol = sapply(saNCTC8325_annotations$V9, 
+                            function(x) sub('gene=','',
+                                            str_extract(x, 'gene=[a-zA-Z0-9_]*'))),
+  product = sapply(saNCTC8325_annotations$V9, 
+                            function(x) sub('product=','',
+                                            str_extract(x, 'product=[a-zA-Z0-9_ -]*')))
+)
+
+saNCTC8325_ann_tag2name <- saNCTC8325_ann_tag2name[!is.na(saNCTC8325_ann_tag2name$locus_tag),]
+saNCTC8325_ann_name2product <- saNCTC8325_ann_name2product[!is.na(saNCTC8325_ann_name2product$product),]
+
+saNCTC8325_ann_tag2name2 <- merge(saNCTC8325_ann_tag2name,
+                                  saNCTC8325_ann_name2product,
+                                  all.x = T)
+
+
+rownames(saNCTC8325_ann_tag2name2) <- make.unique(saNCTC8325_ann_tag2name2$locus_tag)
+
+
+sepandb1282_annotations <- read.csv('PROKKA_02092022.gff', 
+                             stringsAsFactors = F,
+                             skip = 43476,
+                             header=F,
+                             nrows = 17189,
+                             sep = '\t')
+
+sepandb1282_ann_tag2name <- data.frame(
+  locus_tag = sapply(sepandb1282_annotations$V9, 
+                            function(x) sub('locus_tag=','',
+                                            str_extract(x, 'locus_tag=KCCCLBPF_[0-9]*'))),
+  gene_symbol = sapply(sepandb1282_annotations$V9, 
+                            function(x) sub('Name=','',
+                                            str_extract(x, 'Name=[a-zA-Z0-9_]*')))
+)
+sepandb1282_ann_tag2name$locus_tag[is.null(sepandb1282_ann_tag2name$V9 )] <- 'CRISPR'
+rownames(sepandb1282_ann_tag2name) <- make.unique(sepandb1282_ann_tag2name$locus_tag)
+
+sepandb1282_ann_name2product <- data.frame(
+  gene_symbol = sapply(sepandb1282_annotations$V9, 
+                            function(x) sub('gene=','',
+                                            str_extract(x, 'gene=[a-zA-Z0-9_]*'))),
+  product = sapply(sepandb1282_annotations$V9, 
+                            function(x) sub('product=','',
+                                            str_extract(x, 'product=[a-zA-Z0-9_ -]*')))
+)
+
+sepandb1282_ann_tag2name <- sepandb1282_ann_tag2name[!is.na(sepandb1282_ann_tag2name$locus_tag),]
+sepandb1282_ann_name2product <- sepandb1282_ann_name2product[!is.na(sepandb1282_ann_name2product$product),]
+
+sepandb1282_ann_tag2name2 <- merge(sepandb1282_ann_tag2name,
+                                  sepandb1282_ann_name2product,
+                                  all.x = T)
+
+
+rownames(sepandb1282_ann_tag2name2) <- make.unique(sepandb1282_ann_tag2name2$locus_tag)
+
+
+
+```
+
+```{r}
+se_sa_map <- read.csv('se16_sa3825_map.csv',
+                      stringsAsFactors = F)
+sepandb1282_tu3298_map <- read.csv('seTU3298_to_pandb1282_dcmegab_best_hits.csv',
+                      stringsAsFactors = F,
+                      header = F,
+                      sep='@')
+
+sepandb1282_tu3298_map_ordered <- sepandb1282_tu3298_map[order(sepandb1282_tu3298_map$V3),]
+
+rownames(sepandb1282_tu3298_map_ordered) <- make.unique(sepandb1282_tu3298_map_ordered $V2)
+```
+
+
+
+# Gene-gene correlations
+
+```{r}
+corr_method <- 'pearson' # pearson, kendall, spearman
+sa_comp_corr <- cor(t(sa_comp[,-1]), method = corr_method) 
+rownames(sa_comp_corr)  <- sa_comp$X
+colnames(sa_comp_corr)  <- sa_comp$X
+
+sa_comp_mapped_corr <- cor(t(sa_comp_mapped[,-1]), method = corr_method)
+rownames(sa_comp_mapped_corr)  <- se_names_ordered
+colnames(sa_comp_mapped_corr)  <- se_names_ordered
+
+se_comp_corr <- cor(t(se_comp[,-1]), method = corr_method)
+rownames(se_comp_corr)  <- se_names_ordered
+colnames(se_comp_corr)  <- se_names_ordered
+
+postFT_model_corr <- cor(t(postFT_model), method = corr_method)
+rownames(postFT_model_corr)  <- se_names_ordered
+colnames(postFT_model_corr)  <- se_names_ordered
+
+preFT_model_corr <- cor(t(preFT_model), method = corr_method)
+rownames(preFT_model_corr)  <- se_names_ordered
+colnames(preFT_model_corr)  <- se_names_ordered
+
+se_model_corr <- cor(t(seONLY_model), method = corr_method)
+rownames(se_model_corr)  <- se_names_ordered
+colnames(se_model_corr)  <- se_names_ordered
+
+sa_model_corr <- cor(t(saONLY_model), method = corr_method)
+rownames(sa_model_corr)  <- se_names_ordered
+colnames(sa_model_corr)  <- se_names_ordered
+```
+
+
+```{r}
+par(mfrow = c(1,2))
+
+corrplot(se_comp_corr[1:10,1:10], 
+         method = 'color', 
+         order = 'original', 
+          tl.pos = 'n',
+         diag = FALSE)
+
+corrplot(sa_comp_corr[1:10,1:10], method = 'color', 
+         order = 'original', 
+          tl.pos = 'n',
+         diag = FALSE)
+```
+
+
+```{r}
+par(mfrow = c(1,2))
+
+corrplot(se_comp_corr[1:100,1:100], method = 'color', 
+         order = 'original', 
+          tl.pos = 'n',
+         diag = FALSE)
+
+corrplot(sa_comp_corr[1:100,1:100], method = 'color', 
+         order = 'original', 
+          tl.pos = 'n',
+         diag = FALSE)
+```
+
+
+```{r}
+par(mfrow = c(1,2))
+
+corrplot(sa_comp_corr[1:100,1:100], method = 'color', 
+         order = 'original', 
+          tl.pos = 'n',
+         diag = FALSE)
+
+corrplot(sa_comp_mapped_corr[1:100,1:100], method = 'color', 
+         order = 'original', 
+          tl.pos = 'n',
+         diag = FALSE)
+```
+
+
+```{r}
+par(mfrow = c(1,2))
+
+corrplot(se_comp_corr[1:100,1:100], method = 'color', 
+         order = 'original', 
+          tl.pos = 'n',
+         diag = FALSE)
+
+corrplot(sa_comp_mapped_corr[1:100,1:100], method = 'color', 
+         order = 'original', 
+          tl.pos = 'n',
+         diag = FALSE)
+```
+
+
+
+```{r}
+par(mfrow = c(2,2))
+
+corrplot(se_comp_corr[1:100,1:100], method = 'color', 
+         title='S.a. comp', 
+         mar=c(0,0,1,0),
+         order = 'original', 
+          tl.pos = 'n',
+         diag = FALSE)
+
+corrplot(sa_comp_mapped_corr[1:100,1:100], method = 'color', 
+         title='S.a. comp', 
+         mar=c(0,0,1,0),
+         order = 'original', 
+          tl.pos = 'n',
+         diag = FALSE)
+
+corrplot(se_model_corr[1:100,1:100], method = 'color', 
+         title='S.e. model', 
+         mar=c(0,0,1,0),
+         order = 'original', 
+         tl.pos = 'n',
+         diag = FALSE)
+
+corrplot(sa_model_corr[1:100,1:100], method = 'color', 
+         title='S.a. model', 
+         mar=c(0,0,1,0),
+         order = 'original', 
+         tl.pos = 'n',
+         diag = FALSE)
+
+```
+
+```{r}
+par(mfrow = c(2,2))
+
+
+
+corrplot(se_model_corr[1:100,1:100], method = 'color', 
+         title='S.e. model', 
+         mar=c(0,0,1,0),
+         order = 'original', 
+         tl.pos = 'n',
+         diag = FALSE)
+
+corrplot(sa_model_corr[1:100,1:100], method = 'color', 
+         title='S.a. model', 
+         mar=c(0,0,1,0),
+         order = 'original', 
+         tl.pos = 'n',
+         diag = FALSE)
+
+corrplot(postFT_model_corr[1:100,1:100], method = 'color', 
+         title='S.e. model post fine-tune', 
+         mar=c(0,0,1,0),
+         
+         tl.pos = 'n',
+         order = 'original', diag = FALSE)
+
+corrplot(preFT_model_corr[1:100,1:100], method = 'color', 
+         title='S.e. model pre fine-tune', 
+         mar=c(0,0,1,0),
+         tl.pos = 'n',
+         order = 'original', diag = FALSE)
+```
+
+
+
+
+```{r}
+
+```
+
+
+
+# Plot by KEGG pathway
+
+```{r}
+se_2CS <- unlist(str_split(se1282_kegg['map02020:Two-component system', 'Genes'],
+                    pattern = ';'))
+se_2CS_filt <- se_2CS[se_2CS %in%rownames(postFT_model_corr)]
+
+
+sa_2CS <- unlist(str_split(saNCTC8325_kegg['sao02020:Two-component system - Staphylococcus aureus subsp. aureus NCTC8325', 'Genes'],
+                    pattern = ';'))
+
+sa_2CS_filt <- sa_2CS[sa_2CS %in%rownames(sa_model_corr)]
+
+```
+
+
+
+
+
+
+
+
+
+
+# Tangles
+
+
+
+
+
+
+
+
+### Tangle of compendium vs model
+
+```{r}
+rands <- sample(rownames(se_comp), 50, replace=F)
+homs <- sapply(rands,
+       function(x) max(sa_comp_mapped[x,-1])) > 0
+
+d1 <- postFT_model[rands,] %>% dist() %>% hclust( method="complete" ) %>% as.dendrogram()
+d2 <- se_comp[rands,] %>% dist() %>% hclust( method="complete" ) %>% as.dendrogram()
+
+d3 <- d2 %>% match_order_by_labels(d1)
+
+
+# Custom these kendo, and place them in a list
+dl <- dendlist(
+  d1 %>% 
+    set("labels_col", as.numeric(homs)+1) %>%
+    set("branches_lty", 1) ,
+  d2 %>% 
+    set("labels_col",  as.numeric(homs)+1)  %>%
+    set("branches_lty", 1) 
+)
+ 
+dl  %>% entanglement
+
+dl_unt <- dl %>% untangle(method = "step1side") 
+dl_unt %>% entanglement
+tanglegram(dl_unt, 
+           common_subtrees_color_lines = TRUE, 
+           common_subtrees_color_branches = TRUE,
+           highlight_distinct_edges  = TRUE, 
+           highlight_branches_lwd=FALSE, 
+           margin_inner=7,
+           lwd=2,
+           main_left = "post ft ",
+           main_right = "se comp",
+           match_order_by_labels = TRUE
+)
+```
+
+### KEGG paths
+
+```{r}
+tangle_kegg <- function(se_path){
+  
+  se_2CS <- unlist(str_split(se16_kegg[se_path, 'Genes'],
+                    pattern = ';'))
+se_2CS_filt <- se_2CS[se_2CS %in%rownames(postFT_model_corr)]
+
+
+  homs <- sapply(se_2CS_filt,
+       function(x) max(sa_comp_mapped[x,-1])) > 0
+
+d1 <- postFT_model[se_2CS_filt,] %>% dist() %>% hclust( method="complete" ) %>% as.dendrogram()
+d2 <- preFT_model[se_2CS_filt,] %>% dist() %>% hclust( method="complete" ) %>% as.dendrogram()
+
+d3 <- d2 %>% match_order_by_labels(d1)
+
+
+# Custom these kendo, and place them in a list
+dl <- dendlist(
+  d1 %>% 
+    set("labels_col", as.numeric(homs)+1) %>%
+    set("branches_lty", 1) ,
+  d2 %>% 
+    set("labels_col",  as.numeric(homs)+1)  %>%
+    set("branches_lty", 1) 
+)
+ 
+
+dl  %>% entanglement
+
+# Plot them together
+name_safe <- sub('/','_',sub(':','_',sub(' ','_',se_path)))
+
+png(paste(c('tangles/t_',name_safe,'.png'), collapse=''), res = 600, width = 5, height = 5, units = 'in')
+  par(mfrow = c(2,2))
+tanglegram(dl, 
+           common_subtrees_color_lines = TRUE, 
+           common_subtrees_color_branches = TRUE,
+           highlight_distinct_edges  = TRUE, 
+           highlight_branches_lwd=FALSE, 
+           margin_inner=7,
+           lwd=2,
+           match_order_by_labels = TRUE
+)
+dev.off()
+}
+```
+
+```{r}
+se_kegg_m2 <- se1282_kegg$KEGGPathID[se1282_kegg$Length > 2]
+
+#tangles <- lapply(se_kegg_m2, function(x) tangle_kegg(x))
+```
+
+
+# As nets
+
+Gene-gene nets can show correlation results with visual interpretation:
+
+- edge weight is gene-gene correlation in the data matrix or model weights
+- node color is e value from homolog mapping
+- node outline is whether gene is in pathway being plotted
+
+```{r}
+edges <- melt(se_comp_corr)
+colnames(edges) <- c('from','to','weight')
+edges <- edges[edges$weight > 0.4,]
+de_genes <- se_2CS_filt
+
+de_edges <- edges[edges$weight > 0.8 & (edges$from %in% de_genes | edges$to %in% de_genes),]
+
+net_genes <- union(union(de_genes, de_edges$from), de_edges$to)
+net_edges <- de_edges
+net_edges <- net_edges[!is.na(net_edges$from),]
+
+net_edges <- net_edges[!net_edges$from == net_edges$to,]
+```
+
+```{r}
+my_palette <- colorRampPalette(c("blue", "white", "red"))(n = 700)
+
+g <- graph.data.frame(net_edges[,c(1,2,3)], directed=F)
+E(g)$width <- (net_edges$weight * 20)-10
+
+bd  <- sapply(vertex_attr(g, 'name'), function(x) if(x %in% de_genes){if(x %in% de_genes){'black'}else{'yellow'}}else{if(x %in% de_genes){'grey'}else{'white'}})
+
+
+homs  <- sapply(vertex_attr(g, 'name'), function(x) -log(min(se_sa_map[se_sa_map$se16_ID == x, 'hit_evalue'], na.rm=T)))
+homs[homs == -Inf] <- 0
+homs[homs == Inf] <- max(homs[! homs == Inf]) * 2
+
+node.colors <- (homs + max(homs)) / (2*max(homs)) * 700
+V(g)$color <- my_palette[node.colors]
+
+
+plot(g, vertex.label = NA, vertex.frame.color = bd)
+```
+
+```{r}
+ceb <- cluster_edge_betweenness(g) 
+```
+
+```{r}
+plot(ceb, g, 
+     vertex.label = NA, 
+     col = vertex_attr(g, 'color'), 
+     mark.coly = brewer.pal(n = 8, name = "Set3"))
+```
+
+
+```{r}
+plot_nets <- function(se_path){
+se_2CS <- unlist(str_split(se1282_kegg[se_path, 'Genes'],
+                    pattern = ';'))
+se_2CS_filt <- se_2CS[se_2CS %in%rownames(postFT_model_corr)]
+
+de_genes <- se_2CS_filt
+
+de_edges <- edges[edges$weight > 0.95 & (edges$from %in% de_genes | edges$to %in% de_genes),]
+
+net_genes <- union(union(de_genes, de_edges$from), de_edges$to)
+net_edges <- de_edges
+net_edges <- net_edges[!is.na(net_edges$from),]
+net_edges <- net_edges[!net_edges$from == net_edges$to,]
+
+
+my_palette <- colorRampPalette(c("blue", "white", "red"))(n = 700)
+
+g <- graph.data.frame(net_edges[,c(1,2,3)], directed=F)
+E(g)$width <- (net_edges$weight * 30)-29
+
+bd  <- sapply(vertex_attr(g, 'name'), function(x) if(x %in% de_genes){'black'}else{'grey'})
+
+
+homs  <- sapply(vertex_attr(g, 'name'), function(x) -log(min(se_sa_map[se_sa_map$se16_ID == x, 'hit_evalue'], na.rm=T)))
+homs[homs == -Inf] <- 0
+homs[homs == Inf] <- max(homs[! homs == Inf]) * 2
+
+node.colors <- (homs + max(homs)) / (2*max(homs)) * 700
+V(g)$color <- my_palette[node.colors]
+
+ceb <- cluster_edge_betweenness(g) 
+name_safe <- sub('/','_',sub(':','_',sub(' ','_',se_path)))
+
+#png(paste(c('net_plots/',name_safe,'.png'), collapse=''), res = 600, width = 5, height = 5, units = 'in')
+plot(ceb, g, 
+     vertex.label = NA, 
+     col = vertex_attr(g, 'color'), 
+     vertex.frame.color = bd,
+     mark.coly = brewer.pal(n = 8, name = "Set3"))
+#dev.off()
+
+names <- sapply(vertex_attr(g, 'name'), function(x) se16_ann_tag2name[x,'gene_symbol'])
+
+#png(paste(c('net_plots/',name_safe,'_names.png'), collapse=''), res = 600, width = 5, height = 5, units = 'in')
+plot(ceb, g, 
+     vertex.label = names, 
+     vertex.label.cex = .3,
+     vertex.label.color = 'black',
+    col = vertex_attr(g, 'color'), 
+     vertex.frame.color = bd,
+     mark.coly = brewer.pal(n = 8, name = "Set3"))
+#dev.off()
+}
+```
+
+```{r}
+se_kegg_m2 <- se16_kegg$KEGGPathID[se16_kegg$Length > 2]
+
+#nets <- lapply(se_kegg_m2, function(x) plot_nets(x))
+```
+
+
+
+
+```{r}
+#lapply(se_kegg_m2[57], function(x) plot_nets(x))
+
+se_path <- se_kegg_m2[57]
+se_2CS <- unlist(str_split(se16_kegg[se_path, 'Genes'],
+                    pattern = ';'))
+se_2CS_filt <- se_2CS[se_2CS %in%rownames(postFT_model_corr)]
+
+de_genes <- se_2CS_filt
+
+de_edges <- edges[edges$weight > 0.75 & (edges$from %in% de_genes | edges$to %in% de_genes),]
+
+net_genes <- union(union(de_genes, de_edges$from), de_edges$to)
+net_edges <- de_edges
+net_edges <- net_edges[!is.na(net_edges$from),]
+net_edges <- net_edges[!net_edges$from == net_edges$to,]
+
+
+my_palette <- colorRampPalette(c("blue", "white", "red"))(n = 700)
+
+g <- graph.data.frame(net_edges[,c(1,2,3)], directed=F)
+E(g)$width <- (net_edges$weight * 30)-29
+
+bd  <- sapply(vertex_attr(g, 'name'), function(x) if(x %in% de_genes){if(x %in% de_genes){'black'}else{'yellow'}}else{if(x %in% de_genes){'grey'}else{'white'}})
+
+rownames(sepandb1282_tu_map) <- make.unique(sepandb1282_tu_map$V2)
+g_tu_names <- sepandb1282_tu_map[vertex_attr(g, 'name'), "V1"]
+rownames(se16_tu_map) <- make.unique(se16_tu_map$tu3298_ID)
+g_16_names <- se16_tu_map[g_tu_names, "se16_ID"]
+
+homs  <- sapply(g_16_names, function(x) -log(min(se_sa_map[se_sa_map$se16_ID == x, 'hit_evalue'], na.rm=T)))
+homs[homs == -Inf] <- 0
+homs[homs == Inf] <- max(homs[! homs == Inf]) * 2
+
+node.colors <- (homs + max(homs)) / (2*max(homs)) * 700
+V(g)$color <- my_palette[node.colors]
+
+ceb <- cluster_edge_betweenness(g) 
+
+
+plot(ceb, g, 
+     vertex.label = NA, 
+     col = vertex_attr(g, 'color'), 
+     mark.coly = brewer.pal(n = 8, name = "Set3"))
+```
+
+
+# Michelle's stress response genes
+
+```{r}
+spoto_stress <- read.csv('spoto_stress_genes.csv', stringsAsFactors = F)
+se16_tu_map <- read.csv('se16_tu3298_map.csv', stringsAsFactors = F)
+sepandb1282_tu_map <- read.csv('seTU3298_to_pandb1282_dcmegab_best_hits.csv', 
+                               stringsAsFactors = F,
+                               sep='@',
+                               header=F)
+
+spoto_stress_se16 <- unique(se16_tu_map$se16_ID[se16_tu_map$tu3298_ID %in% spoto_stress$Tu3298.ID])
+
+spoto_stress_sepandb1282 <- unique(sepandb1282_tu_map$V2[sepandb1282_tu_map$V1 %in% spoto_stress$Tu3298.ID])
+
+spoto_stress_sepandb1282_names <- se_names[spoto_stress_sepandb1282, 'X2']
+
+se_2CS_filt <- c(spoto_stress_sepandb1282[spoto_stress_sepandb1282 %in%rownames(se_model_corr)],
+                 spoto_stress_sepandb1282_names[spoto_stress_sepandb1282_names %in%rownames(se_model_corr)])
+
+```
+
+
+
+```{r, fig.height=8, fig.width=8}
+par(mfrow = c(3,2))
+
+
+
+spoto_stress_sepandb1282_filt <- spoto_stress_sepandb1282[spoto_stress_sepandb1282 %in% se_comp$X]
+spoto_stress_sepandb1282_filt_tu <- sepandb1282_tu3298_map_ordered[spoto_stress_sepandb1282_filt, 'V1']
+se_2CS_names <- seTU_ann_tag2name[spoto_stress_sepandb1282_filt_tu ,'product']
+
+se_comp_temp <- se_comp_corr
+rownames(se_comp_temp) <- colnames(se_comp_temp) <- se_comp$X
+se_comp_temp <- se_comp_temp[spoto_stress_sepandb1282_filt, spoto_stress_sepandb1282_filt]
+rownames(se_comp_temp) <- colnames(se_comp_temp) <-  spoto_stress_sepandb1282_filt_tu
+
+sa_comp_mapped_temp <- sa_comp_mapped_corr
+rownames(sa_comp_mapped_temp) <- colnames(sa_comp_mapped_temp) <- se_comp$X
+sa_comp_mapped_temp <- sa_comp_mapped_temp[spoto_stress_sepandb1282_filt,spoto_stress_sepandb1282_filt]
+rownames(sa_comp_mapped_temp) <- colnames(sa_comp_mapped_temp) <-  spoto_stress_sepandb1282_filt_tu
+
+postFT_model_temp <- postFT_model_corr
+rownames(postFT_model_temp) <- colnames(postFT_model_temp) <- se_comp$X
+postFT_model_temp <- postFT_model_temp[spoto_stress_sepandb1282_filt,spoto_stress_sepandb1282_filt]
+rownames(postFT_model_temp) <- colnames(postFT_model_temp) <-  spoto_stress_sepandb1282_filt_tu
+
+preFT_model_temp <- preFT_model_corr
+rownames(preFT_model_temp) <- colnames(preFT_model_temp) <- se_comp$X
+preFT_model_temp <- preFT_model_temp[spoto_stress_sepandb1282_filt,spoto_stress_sepandb1282_filt]
+rownames(preFT_model_temp) <- colnames(preFT_model_temp) <-  spoto_stress_sepandb1282_filt_tu
+
+se_model_temp <- se_model_corr
+rownames(se_model_temp) <- colnames(se_model_temp) <- se_comp$X
+se_model_temp <- se_model_temp[spoto_stress_sepandb1282_filt,spoto_stress_sepandb1282_filt]
+rownames(se_model_temp) <- colnames(se_model_temp) <-  spoto_stress_sepandb1282_filt_tu
+
+sa_model_temp <- sa_model_corr
+rownames(sa_model_temp) <- colnames(sa_model_temp) <- se_comp$X
+sa_model_temp <- sa_model_temp[spoto_stress_sepandb1282_filt,spoto_stress_sepandb1282_filt]
+rownames(sa_model_temp) <- colnames(sa_model_temp) <-  spoto_stress_sepandb1282_filt_tu
+
+
+corrplot(se_comp_temp, 
+         method = 'color', 
+         title='S.e. comp', 
+         mar=c(0,0,1,0),
+         order = 'original', 
+         tl.cex = 0.3,
+         tl.col = 'black',
+         diag = FALSE)
+
+sa_comp_mapped_temp[is.na(sa_comp_mapped_temp)] <- 0
+corrplot(sa_comp_mapped_temp, 
+         method = 'color', 
+         title='S.a. comp', 
+         mar=c(0,0,1,0),
+         order = 'original', 
+         tl.cex = 0.3,
+         tl.col = 'black',
+         diag = FALSE)
+
+
+corrplot(postFT_model_temp, 
+         title='S.e. model post fine-tune', 
+         mar=c(0,0,1,0),
+         method = 'color', 
+         order = 'hclust', 
+         diag = FALSE,
+         tl.col = 'black',
+         tl.cex = 0.3)
+
+corrplot(preFT_model_temp, 
+         title='S.e. model pre fine-tune', 
+         mar=c(0,0,1,0),
+         method = 'color', 
+         order = 'hclust', 
+         diag = FALSE,
+         tl.col = 'black',
+         tl.cex = 0.3)
+
+corrplot(se_model_temp, 
+         title='S.e. model ', 
+         mar=c(0,0,1,0),
+         method = 'color', 
+         order = 'hclust', 
+         diag = FALSE,
+         tl.col = 'black',
+         tl.cex = 0.3)
+
+corrplot(sa_model_temp, 
+         title='S.a. model ', 
+         mar=c(0,0,1,0),
+         method = 'color', 
+         order = 'hclust', 
+         diag = FALSE,
+         tl.col = 'black',
+         tl.cex = 0.3)
+```
+
+
+```{r}
+#png(paste(c('corrplots_spoto_multi_stress_sepanDB1282','.png'), collapse=''), res = 600, width = 10, height = 12, units = 'in')
+
+
+
+par(mfrow = c(3,2))
+corrplot(se_comp_temp, 
+         method = 'color', 
+         title='S.e. comp', 
+         mar=c(0,0,1,0),
+         order = 'original', 
+         tl.cex = 0.3,
+         tl.col = 'black',
+         diag = FALSE)
+
+sa_comp_mapped_temp[is.na(sa_comp_mapped_temp)] <- 0
+corrplot(sa_comp_mapped_temp, 
+         method = 'color', 
+         title='S.a. comp', 
+         mar=c(0,0,1,0),
+         order = 'original', 
+         tl.cex = 0.3,
+         tl.col = 'black',
+         diag = FALSE)
+
+corrplot(se_model_temp, 
+         title='S.e. model ', 
+         mar=c(0,0,1,0),
+         method = 'color', 
+         order = 'hclust', 
+         diag = FALSE,
+         tl.col = 'black',
+         tl.cex = 0.3)
+
+corrplot(sa_model_temp, 
+         title='S.a. model ', 
+         mar=c(0,0,1,0),
+         method = 'color', 
+         order = 'hclust', 
+         diag = FALSE,
+         tl.col = 'black',
+         tl.cex = 0.3)
+
+corrplot(postFT_model_temp, 
+         title='S.e. model post fine-tune', 
+         mar=c(0,0,1,0),
+         method = 'color', 
+         order = 'hclust', 
+         diag = FALSE,
+         tl.col = 'black',
+         tl.cex = 0.3)
+
+corrplot(preFT_model_temp, 
+         title='S.e. model pre fine-tune', 
+         mar=c(0,0,1,0),
+         method = 'color', 
+         order = 'hclust', 
+         diag = FALSE,
+         tl.col = 'black',
+         tl.cex = 0.3)
+
+
+
+#dev.off()
+```
+
+
+```{r}
+#png(paste(c('corrplots_spoto_multi_stress_sepanDB1282_names','.png'), collapse=''), res = 600, width = 15, height = 15, units = 'in')
+
+rownames(se_comp_temp) <- colnames(se_comp_temp) <-  se_2CS_names
+rownames(sa_comp_mapped_temp) <- colnames(sa_comp_mapped_temp) <-  se_2CS_names
+rownames(postFT_model_temp) <- colnames(postFT_model_temp) <-  se_2CS_names
+rownames(preFT_model_temp) <- colnames(preFT_model_temp) <-  se_2CS_names
+
+par(mfrow = c(2,2))
+
+se_comp_temp[is.na(se_comp_temp)] <- 0
+corrplot(se_comp_temp, 
+         method = 'color', 
+         title='S.e. comp', 
+         mar=c(0,0,1,0),
+         order = 'original', 
+         tl.cex = 0.3,
+         tl.col = 'black',
+         diag = FALSE)
+
+sa_comp_mapped_temp[is.na(sa_comp_mapped_temp)] <- 0
+corrplot(sa_comp_mapped_temp, 
+         method = 'color', 
+         title='S.a. comp', 
+         mar=c(0,0,1,0),
+         order = 'original', 
+         tl.cex = 0.3,
+         tl.col = 'black',
+         diag = FALSE)
+
+
+corrplot(postFT_model_temp, 
+         title='S.e. model post fine-tune', 
+         mar=c(0,0,1,0),
+         method = 'color', 
+         order = 'hclust', 
+         diag = FALSE,
+         tl.col = 'black',
+         tl.cex = 0.3)
+
+corrplot(preFT_model_temp, 
+         title='S.e. model pre fine-tune', 
+         mar=c(0,0,1,0),
+         method = 'color', 
+         order = 'hclust', 
+         diag = FALSE,
+         tl.col = 'black',
+         tl.cex = 0.3)
+
+#dev.off()
+```
+
+
+```{r}
+
+postFT_model_temp <- postFT_model
+preFT_model_temp <- preFT_model
+
+rownames(postFT_model_temp) <- se_comp$X
+rownames(preFT_model_temp) <- se_comp$X
+
+sa_comp_mapped_temp <- sa_comp_mapped
+rownames(sa_comp_mapped_temp)  <- se_comp$X
+
+homs <- sapply(spoto_stress_sepandb1282_filt,
+       function(x) max(sa_comp_mapped_temp[x,-1])) > 0
+
+d1 <- postFT_model_temp[spoto_stress_sepandb1282_filt,] %>% dist() %>% hclust( method="complete" ) %>% as.dendrogram()
+d2 <- preFT_model_temp[spoto_stress_sepandb1282_filt,] %>% dist() %>% hclust( method="complete" ) %>% as.dendrogram()
+
+d3 <- d1 %>% match_order_by_labels(d2)
+
+
+# Custom these kendo, and place them in a list
+dl <- dendlist(
+  d2 %>% 
+    set("labels_col",  as.numeric(homs)+1)  %>%
+    set("branches_lty", 1) ,
+  d1 %>% 
+    set("labels_col", as.numeric(homs)+1) %>%
+    set("branches_lty", 1)
+)
+ 
+
+dl  %>% entanglement
+
+# Plot them together
+#name_safe <- sub('/','_',sub(':','_',sub(' ','_',se_path)))
+
+#png(paste(c('tangles/t_','spoto_multi_stress_sepanDB1282','.png'), collapse=''), res = 600, width = 5, height = 5, units = 'in')
+tanglegram(dl, 
+           common_subtrees_color_lines = TRUE, 
+           common_subtrees_color_branches = TRUE,
+           highlight_distinct_edges  = TRUE, 
+           highlight_branches_lwd=FALSE, 
+           margin_inner=7,
+           lwd=2,
+           match_order_by_labels = TRUE
+)
+#dev.off()
+```
+
+```{r}
+de_genes <- se_2CS_filt
+
+de_edges <- edges[edges$weight > 0.999 & (edges$from %in% de_genes | edges$to %in% de_genes),]
+
+net_genes <- union(union(de_genes, de_edges$from), de_edges$to)
+net_edges <- de_edges
+net_edges <- net_edges[!is.na(net_edges$from),]
+
+net_edges <- net_edges[!net_edges$from == net_edges$to,]
+
+my_palette <- colorRampPalette(c("blue", "white", "red"))(n = 700)
+
+g <- graph.data.frame(net_edges[,c(1,2,3)], directed=F)
+E(g)$width <- (net_edges$weight * 20)-10
+
+bd  <- sapply(vertex_attr(g, 'name'), function(x) if(x %in% de_genes){if(x %in% de_genes){'black'}else{'yellow'}}else{if(x %in% de_genes){'grey'}else{'white'}})
+
+
+homs  <- sapply(vertex_attr(g, 'name'), function(x) -log(min(se_sa_map[se_sa_map$se16_ID == x, 'hit_evalue'], na.rm=T)))
+homs[homs == -Inf] <- 0
+homs[homs == Inf] <- max(homs[! homs == Inf]) * 2
+
+
+
+node.colors <- (homs + max(homs)) / (2*max(homs)) * 700
+V(g)$color <- my_palette[node.colors]
+
+ceb <- cluster_edge_betweenness(g) 
+
+names <- sapply(vertex_attr(g, 'name'), function(x) se16_ann_tag2name[x,'gene_symbol'])
+
+plot(ceb, g, 
+     vertex.label = names, 
+     vertex.label.cex = .3,
+     vertex.label.color = 'black',
+     #vertex.label.dist=2,
+     col = vertex_attr(g, 'color'), 
+     mark.coly = brewer.pal(n = 8, name = "Set3"))
+```
+
+
+
+
+```{r}
+de_genes <- se_2CS_filt
+
+de_edges <- edges[edges$weight > 0.8 & (edges$from %in% de_genes | edges$to %in% de_genes),]
+
+net_genes <- union(union(de_genes, de_edges$from), de_edges$to)
+net_edges <- de_edges
+net_edges <- net_edges[!is.na(net_edges$from),]
+
+net_edges <- net_edges[!net_edges$from == net_edges$to,]
+
+my_palette <- colorRampPalette(c("blue", "white", "red"))(n = 700)
+
+g <- graph.data.frame(net_edges[,c(1,2,3)], directed=F)
+E(g)$width <- (net_edges$weight * 20)-10
+
+bd  <- sapply(vertex_attr(g, 'name'), function(x) if(x %in% de_genes){if(x %in% de_genes){'black'}else{'yellow'}}else{if(x %in% de_genes){'grey'}else{'white'}})
+
+rownames(sepandb1282_tu_map) <- make.unique(sepandb1282_tu_map$V2)
+g_tu_names <- sepandb1282_tu_map[vertex_attr(g, 'name'), "V1"]
+rownames(se16_tu_map) <- make.unique(se16_tu_map$tu3298_ID)
+g_16_names <- se16_tu_map[g_tu_names, "se16_ID"]
+homs  <- sapply(g_16_names, function(x) -log(min(se_sa_map[se_sa_map$se16_ID == x, 'hit_evalue'], na.rm=T)))
+homs[homs == -Inf] <- 0
+homs[homs == Inf] <- max(homs[! homs == Inf]) * 2
+
+
+
+node.colors <- (homs + max(homs)) / (2*max(homs)) * 700
+V(g)$color <- my_palette[node.colors]
+
+ceb <- cluster_edge_betweenness(g) 
+
+names <- sapply(vertex_attr(g, 'name'), function(x) se16_ann_tag2name[x,'gene_symbol'])
+
+plot(ceb, g, 
+     vertex.label = names, 
+     vertex.label.cex = .3,
+     vertex.label.color = 'black',
+     #vertex.label.dist=2,
+     col = vertex_attr(g, 'color'), 
+     mark.coly = brewer.pal(n = 8, name = "Set3"))
+
+#png('net_spoto_multi_stress_with_names_panDB1282.png', res = 600, width = 5, height = 5, units = 'in')
+plot(ceb, g, 
+     vertex.label = names, 
+     vertex.label.cex = .5,
+     vertex.label.color = 'black',
+     #vertex.label.dist=2,
+     col = vertex_attr(g, 'color'), 
+     mark.coly = brewer.pal(n = 8, name = "Set3"))
+#dev.off()
+
+```
+
+```{r}
+plot(ceb, g, 
+     vertex.label = NA, 
+     vertex.label.cex = .3,
+     vertex.label.color = 'black',
+     #vertex.label.dist=2,
+     col = vertex_attr(g, 'color'), 
+     mark.coly = brewer.pal(n = 8, name = "Set3"))
+```
+
+```{r}
+rownames(se16_tu_map) <- make.unique(se16_tu_map$se16_ID)
+names_tu <- sapply(g_16_names, function(x) se16_tu_map[x ,'tu3298_ID'])
+
+names_tu <- g_tu_names
+#png('net_spoto_multi_stress_with_names_tu.png', res = 600, width = 5, height = 5, units = 'in')
+plot(ceb, g, 
+     vertex.label = names_tu, 
+     vertex.label.cex = .5,
+     vertex.label.color = 'black',
+     #vertex.label.dist=2,
+     col = vertex_attr(g, 'color'), 
+     mark.coly = brewer.pal(n = 8, name = "Set3"))
+#dev.off()
+
+goi <- c('Tu3298_108','Tu3298_116','Tu3298_181',
+         'Tu3298_779','Tu3298_2157','Tu3298_116',
+         'Tu3298_2208')
+names_tu[!names_tu %in% goi] <- NA
+#png('net_spoto_multi_stress_with_names_tu_select.png', res = 600, width = 5, height = 5, units = 'in')
+plot(ceb, g, 
+     vertex.label = names_tu, 
+     vertex.label.cex = .5,
+     vertex.label.color = 'black',
+     #vertex.label.dist=2,
+     col = vertex_attr(g, 'color'), 
+     mark.coly = brewer.pal(n = 8, name = "Set3"))
+#dev.off()
+
+#png('net_spoto_multi_stress.png', res = 600, width = 5, height = 5, units = 'in')
+plot(ceb, g, 
+     vertex.label = NA, 
+     vertex.label.cex = .5,
+     vertex.label.color = 'black',
+     #vertex.label.dist=2,
+     col = vertex_attr(g, 'color'), 
+     mark.coly = brewer.pal(n = 8, name = "Set3"))
+#dev.off()
+```
+
+
+```{r}
+sessionInfo()
+```
+

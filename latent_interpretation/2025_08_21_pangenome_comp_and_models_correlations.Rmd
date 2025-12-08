@@ -1,0 +1,499 @@
+---
+title: "Pangenome compendia and models"
+output: powerpoint_presentation
+date: "2025-07-03"
+---
+
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  dev = "png",
+  dpi = 300,
+  fig.width = 5,
+  fig.height = 4
+)
+```
+
+```{r, warning=F, message=F, include=F}
+library(librarian)
+shelf(KEGGREST, 
+      EnrichmentBrowser,
+      ComplexHeatmap,
+      circlize,
+      RColorBrewer,
+      DESeq2,
+      dplyr,
+      corrplot,
+      ggplot2,
+      stringr,
+      readr,
+      ggprism,
+      reshape2,
+      ggpubr,
+      WGCNA,
+      ica,
+      gmodels)
+#library(KEGGREST)
+#library(EnrichmentBrowser)
+#library(ComplexHeatmap)
+#library(circlize)
+#library(RColorBrewer)
+#library(DESeq2)
+#library(dplyr)
+#library(corrplot)
+#library(ggplot2)
+```
+
+
+
+
+
+
+
+
+
+
+
+## Load operon corr tables
+
+
+
+```{r}
+comp <- read.csv('../data_files/sepi_pan_genome_log_counts_norm_01.csv', 
+                 stringsAsFactors = F)
+se_ops <- read.csv('sepi_pan_operon_format.txt', sep = '\t', 
+                   stringsAsFactors = F)
+
+```
+
+```{r}
+corr_files <- list.files("/work/gd134/operon_corr_comp/", pattern = "pcorr.csv")
+epi_corr <- corr_files
+
+
+corr_list <- lapply(epi_corr,  function(x){
+  t <- read.csv(paste0('/work/gd134/operon_corr_comp/',x),
+           stringsAsFactors = F,
+           row.names=1)
+  t$dataset <- paste(paste(paste(paste(str_extract(x, "(s[ea][pu][ir]_pan_genome_)([a-zA-Z]*)", group=2)
+                     ,str_extract(x, "norm_01[_a-z][_a-z][_a-z][_a-z]")),
+                     str_extract(x, "p[or][se][tFP]*T")),
+                     str_extract(x, "seed[0-9]*")),
+                     str_extract(x, "rand"))
+  samp <- sample(rownames(t)[(t$set=="noperon") & !(t$value == 0)],5000)
+  t[(t$set == "operon") | (rownames(t) %in% samp),]
+}
+)
+
+short_names <- paste(paste(paste(paste(str_extract(epi_corr, "(s[ea][pu][ir]_pan_genome_)([a-zA-Z]*)", group=2)
+                     ,str_extract(epi_corr, "norm_01[_a-z][_a-z][_a-z][_a-z]")),
+                     str_extract(epi_corr, "p[or][se][tFP]*T")),
+                     str_extract(epi_corr, "seed[0-9]*")),
+                     str_extract(epi_corr, "rand"))
+
+names(corr_list) <- short_names
+lapply(corr_list, function(x) dim(x))
+
+```
+
+```{r}
+operon_df <- do.call(rbind, corr_list)
+```
+
+
+# gene p/a data
+
+```{r}
+epi_gpa <- read.csv("sepi_out_1707234787/gene_presence_absence.csv", stringsAsFactors = F)
+epi_gpa$species <- "Sepi"
+epi_gpa$hyp <- sapply(epi_gpa$Annotation, function(x) if( x == "hypothetical protein"){"hypothetical protein"}else{"characterized (named)"})
+
+epi_gpa$compound_name <- apply(epi_gpa[,c(15:20)], 1, FUN = function(x) paste(x, collapse  = " ") )
+epi_gpa$first_name <- sapply(epi_gpa$compound_name, function(x) str_extract(x, "[0-9a-zA-Z_]+"))
+
+gpa_tt <- epi_gpa[,c(15:20)]
+
+gpa_tt[gpa_tt == ""] <- 0
+gpa_tt[!(gpa_tt == 0)] <- 1
+
+gpa_tt <-  as.data.frame(apply(gpa_tt, 2, as.numeric))
+rownames(gpa_tt) <- epi_gpa$first_name
+
+sum(rowSums(gpa_tt) == epi_gpa$No..isolates)
+```
+
+
+```{r}
+operon_df$sorted <- apply(operon_df[, c("Var1", "Var2", "dataset")], 1, FUN = function(x) paste(as.list(sort(unlist(c(x)), decreasing = F)), collapse = ","))
+
+operon_df$sorted_u <- make.unique(operon_df$sorted)
+
+operon_df_dd <- operon_df[operon_df$sorted_u %in% operon_df$sorted,]
+```
+
+
+```{r}
+
+
+operon_df_dd$cogenome <- apply(operon_df_dd[,c("Var1","Var2")],1, FUN = function(x) sum(gpa_tt[x[1],] == gpa_tt[x[2],]))
+
+```
+
+
+```{r}
+unique(operon_df_dd$dataset)
+
+operon_df_dd$dataset <- factor(operon_df_dd$dataset, levels = c("log norm_01_opc",
+                                                                "log norm_01_pca",
+                                                                "log norm_01_ica",
+                                                                "log norm_01pi_p"  ,
+                                                                "BLAST norm_01pi_p"))
+```
+
+
+```{r,, fig.width=6, fig.height =6 }
+plot_temp <- operon_df_dd[!(operon_df_dd$value == 0),]
+
+#variable_order <- tapply(plot_temp$value, plot_temp$dataset, FUN = function(x) mean(x, na.rm=T))
+
+#plot_temp$dataset <- factor(plot_temp$dataset, levels = names(sort(variable_order)))
+dst <- c("log norm_01_opc NA NA NA",
+         "log norm_01_pca NA NA NA",
+         "log norm_01_ica NA NA NA" ,
+         "log norm_01pi_p postFT seed572 NA",
+         "BLAST norm_01pi_p postFT seed571 NA" )
+
+plot_temp$dataset <- factor(plot_temp$dataset, levels = dst)
+
+g <- ggplot(plot_temp[plot_temp$dataset %in% dst ,] , 
+            aes(x = dataset, y = value, color = set)) +
+    geom_point(alpha = 0.3, position = position_jitterdodge()) +
+  geom_boxplot() + 
+  #facet_grid(dataset~.) +
+  scale_color_brewer(palette = "Dark2") +
+  theme_prism(axis_text_angle = 45)
+g
+
+#ggsave("plots/pca_op_corrs.png")
+```
+
+
+
+```{r,, fig.width=6, fig.height =6 }
+plot_temp <- operon_df_dd[!(operon_df_dd$value == 0),]
+
+#variable_order <- tapply(plot_temp$value, plot_temp$dataset, FUN = function(x) mean(x, na.rm=T))
+
+#plot_temp$dataset <- factor(plot_temp$dataset, levels = names(sort(variable_order)))
+dst <- c("log norm_01_opc NA NA NA",
+         "BLAST norm_01_opc NA NA NA",
+         #"log norm_01_pca NA NA NA",
+         #"BLAST norm_01_pca NA NA NA" ,
+         "BLAST norm_01pi_p postPT seed573 NA"   ,
+         "BLAST norm_01pi_p postFT seed573 NA" ,
+         "BLAST norm_01pi_p postPT seed573 rand",
+         "BLAST norm_01pi_p postFT seed573 rand")
+
+plot_temp$dataset <- factor(plot_temp$dataset, levels = dst)
+
+g <- ggplot(plot_temp[plot_temp$dataset %in% dst ,] , 
+            aes(x = dataset, y = value, color = set)) +
+    geom_point(alpha = 0.3, position = position_jitterdodge()) +
+  geom_boxplot() + 
+  #facet_grid(dataset~.) +
+  scale_color_brewer(palette = "Dark2") +
+  theme_prism(axis_text_angle = 45)
+g
+
+#ggsave("plots/pca_op_corrs.png")
+```
+
+
+
+
+```{r,, fig.width=12, fig.height =8 }
+plot_temp <- operon_df_dd[!(operon_df_dd$value == 0),]
+
+#variable_order <- tapply(plot_temp$value, plot_temp$dataset, FUN = function(x) mean(x, na.rm=T))
+
+#plot_temp$dataset <- factor(plot_temp$dataset, levels = names(sort(variable_order)))
+dst <- c("log norm_01_opc NA NA NA",
+         "BLAST norm_01_opc NA NA NA",
+         #"log norm_01_pca NA NA NA",
+         #"BLAST norm_01_pca NA NA NA" ,
+         "BLAST norm_01pi_p postPT seed573 NA"   ,
+         "BLAST norm_01pi_p postFT seed573 NA" )
+
+plot_temp$dataset <- factor(plot_temp$dataset, levels = dst)
+
+g <- ggplot(plot_temp[plot_temp$dataset %in% dst ,] , 
+            aes(x = factor(cogenome), y = value, color = set)) +
+    geom_point(alpha = 0.3, position = position_jitterdodge()) +
+  geom_boxplot() + 
+  facet_wrap(~dataset, ncol=2) +
+  geom_hline(yintercept=0, lty=2, col="dark grey") +
+  scale_color_brewer(palette = "Dark2") +
+  theme_prism(axis_text_angle = 45)
+g
+
+#ggsave("plots/pca_op_corrs.png")
+```
+
+
+
+
+```{r,, fig.width=8, fig.height = 24 }
+plot_temp <- operon_df_dd[!(operon_df_dd$value == 0),]
+
+#variable_order <- tapply(plot_temp$value, plot_temp$dataset, FUN = function(x) mean(x, na.rm=T))
+
+#plot_temp$dataset <- factor(plot_temp$dataset, levels = names(sort(variable_order)))
+
+g <- ggplot(plot_temp , aes(x = factor(cogenome), y = value, color = set)) +
+    geom_point(alpha = 0.3, position = position_jitterdodge()) +
+  geom_boxplot() + 
+  facet_grid(dataset~.) +
+  scale_color_brewer(palette = "Dark2") +
+  theme_prism(axis_text_angle = 45)
+g
+
+#ggsave("plots/pca_op_corrs.png")
+```
+
+
+
+```{r,, fig.width=12, fig.height = 4 }
+plot_temp <- operon_df_dd[!(operon_df_dd$value == 0),]
+
+#variable_order <- tapply(plot_temp$value, plot_temp$dataset, FUN = function(x) mean(x, na.rm=T))
+
+#plot_temp$dataset <- factor(plot_temp$dataset, levels = names(sort(variable_order)))
+
+g <- ggplot(plot_temp , aes(x = factor(cogenome), y = value, color = dataset)) +
+    geom_point(alpha = 0.3, position = position_jitterdodge()) +
+  geom_boxplot() + 
+  facet_grid(set~.) +
+  scale_color_brewer(palette = "Dark2") +
+  theme_prism(axis_text_angle = 45)
+g
+
+#ggsave("plots/pca_op_corrs.png")
+```
+
+
+
+```{r,, fig.width=8, fig.height = 8 }
+
+
+g <- ggplot(plot_temp , aes(x = as.factor(cogenome), y = value, color = set)) +
+    #geom_point(alpha = 0.3, position = position_jitterdodge()) +
+  geom_violin() + 
+  facet_grid(dataset~.) +
+  scale_color_brewer(palette = "Dark2") +
+  theme_prism(axis_text_angle = 45)
+g
+#ggsave("plots/pca_op_corrs.png")
+```
+
+
+
+
+
+```{r,, fig.width=8, fig.height = 4 }
+
+
+g <- ggplot(plot_temp , aes(x  =value, fill = factor(cogenome))) +
+    #geom_point(alpha = 0.3, position = position_jitterdodge()) +
+  geom_histogram(alpha = 1) + 
+  facet_grid(set ~ dataset, scales = "free") +
+  #facet_grid(.~red_dum) +
+  #scale_y_log10() +
+  scale_fill_brewer(palette = "Dark2") +
+  theme_prism(axis_text_angle = 45)
+g
+
+#ggsave("plots/pca_op_corrs.png")
+```
+
+
+
+
+
+
+## Calculate skew
+
+```{r}
+calc_skew <- function(data){
+  n <- length(data)
+  mean_data <- mean(data)
+  sd_data <- sd(data)
+  skewness_value <- (n * sum((data - mean_data)^3)) / ((n - 1) * (n - 2) * sd_data^3)
+  skewness_value
+}
+
+
+skew_table <- tapply(operon_df_dd$value, list('set' = operon_df_dd$set,
+                                           'dataset' = operon_df_dd$dataset,
+                                           'cogenome' = operon_df_dd$cogenome),
+                     FUN = function(x) calc_skew(x))
+```
+
+
+
+
+
+## Single models
+
+
+
+## KEGG paths
+
+```{r}
+se_kegg <- read.csv('sepi_pan_KEGG_format.txt', sep = '\t', 
+                   stringsAsFactors = F)
+```
+
+
+## Loadkegg corr tables
+
+
+
+```{r}
+k_files <- list.files("/work/gd134/kegg_corr_comp/", pattern = "kgcorr.csv")
+k_corr <- k_files
+
+
+
+k_list <- lapply(k_corr,  function(x){
+  t <- read.csv(paste0('/work/gd134/kegg_corr_comp/',x),
+           stringsAsFactors = F,
+           row.names=1)
+  t$dataset <- paste(paste(paste(paste(str_extract(x, "(s[ea][pu][ir]_pan_genome_)([a-zA-Z]*)", group=2)
+                     ,str_extract(x, "norm_01[_a-z][_a-z][_a-z][_a-z]")),
+                     str_extract(x, "p[or][se][tFP]*T")),
+                     str_extract(x, "seed[0-9]*")),
+                     str_extract(x, "rand"))
+  samp <- sample(rownames(t)[(t$set=="nkegg") & !(t$value == 0)],10000)
+  samp2 <- sample(rownames(t)[(t$set=="kegg") & !(t$value == 0)],10000)
+  t[rownames(t) %in% c(samp,samp2),]
+}
+)
+
+kshort_names <- paste(paste(paste(paste(str_extract(k_corr, "(s[ea][pu][ir]_pan_genome_)([a-zA-Z]*)", group=2)
+                     ,str_extract(k_corr, "norm_01[_a-z][_a-z][_a-z][_a-z]")),
+                     str_extract(k_corr, "p[or][se][tFP]*T")),
+                     str_extract(k_corr, "seed[0-9]*")),
+                     str_extract(k_corr, "rand"))
+names(k_list) <- kshort_names
+lapply(k_list, function(x) dim(x))
+
+```
+
+```{r}
+kegg_df <- do.call(rbind, k_list[c(1:6,8:10)])
+name_map1 <- read.csv('sepi_pan_genome_gene_name_corrector_map.csv', stringsAsFactors = F, row.names = 1)
+rownames(name_map1) <- make.unique(name_map1$X2)
+name_map <- read.csv('sepi_pan_genome_gene_names.csv', stringsAsFactors = F, row.names = 1)
+rownames(name_map) <- name_map$X2
+```
+
+
+
+```{r}
+kegg_df$sorted <- apply(kegg_df[, c("Var1", "Var2", "dataset")], 1, FUN = function(x) paste(as.list(sort(unlist(c(x)), decreasing = F)), collapse = ","))
+
+kegg_df$sorted_u <- make.unique(kegg_df$sorted)
+
+kegg_df_dd <- kegg_df[kegg_df$sorted_u %in% kegg_df$sorted,]
+```
+
+
+```{r}
+kegg_df_dd$Var1_n <- name_map[kegg_df_dd$Var1, "X1"]
+kegg_df_dd$Var2_n <- name_map[kegg_df_dd$Var2, "X1"]
+
+kegg_df_dd$Var1_nn <- name_map1[kegg_df_dd$Var1_n, "X1"]
+kegg_df_dd$Var2_nn <- name_map1[kegg_df_dd$Var2_n, "X1"]
+
+kegg_df_dd$cogenome <- apply(kegg_df_dd[,c("Var1_nn","Var2_nn")],1, FUN = function(x) sum(gpa_tt[x[1],] == gpa_tt[x[2],]))
+
+```
+
+
+
+
+
+```{r,, fig.width=12, fig.height = 8 }
+plot_temp <- kegg_df_dd[!(kegg_df_dd$value == 0),]
+
+#variable_order <- tapply(plot_temp$value, plot_temp$dataset, FUN = function(x) mean(x, na.rm=T))
+
+#plot_temp$dataset <- factor(plot_temp$dataset, levels = names(sort(variable_order)))
+dst <- c("log norm_01_kgc NA NA NA",
+         "BLAST norm_01_kgc NA NA NA",
+         'BLAST norm_01_ica NA NA NA',
+         #"log norm_01_pca NA NA NA",
+         #"BLAST norm_01_pca NA NA NA" ,
+         "BLAST norm_01pi_p postPT seed571 NA"   ,
+         "BLAST norm_01pi_p postFT seed571 NA" )
+
+g <- ggplot(plot_temp[!(plot_temp$path %in% se_kegg$KEGGPathID[se_kegg$Length > 100]) &
+                        (plot_temp$dataset %in% dst),
+                        ] , aes(x = factor(cogenome), y = value, color = set)) +
+    geom_point(alpha = 0.3, position = position_jitterdodge()) +
+  geom_boxplot() + 
+  facet_wrap(~dataset, ncol=2) +
+  scale_color_brewer(palette = "Dark2") +
+    geom_hline(yintercept=0, lty=2, col="dark grey") +
+  theme_prism(axis_text_angle = 45)
+g
+
+#ggsave("plots/pca_op_corrs.png")
+```
+
+
+
+```{r,, fig.width=30, fig.height = 60 }
+plot_temp <- kegg_df_dd[!(kegg_df_dd$value == 0),]
+
+#variable_order <- tapply(plot_temp$value, plot_temp$dataset, FUN = function(x) mean(x, na.rm=T))
+
+#plot_temp$dataset <- factor(plot_temp$dataset, levels = names(sort(variable_order)))
+
+g <- ggplot(plot_temp[!(plot_temp$path %in% se_kegg$KEGGPathID[se_kegg$Length > 100]),
+                        ] , aes(x = factor(cogenome), y = value, color = set)) +
+    geom_point(alpha = 0.3, position = position_jitterdodge()) +
+  geom_boxplot() + 
+  facet_grid(path~dataset) +
+  scale_color_brewer(palette = "Dark2") +
+  theme_prism(axis_text_angle = 45)
+g
+
+#ggsave("plots/pca_op_corrs.png")
+```
+
+
+
+```{r,, fig.width=8, fig.height = 4}
+plot_temp <- kegg_df_dd[!(kegg_df_dd$value == 0),]
+
+#variable_order <- tapply(plot_temp$value, plot_temp$dataset, FUN = function(x) mean(x, na.rm=T))
+
+#plot_temp$dataset <- factor(plot_temp$dataset, levels = names(sort(variable_order)))
+
+g <- ggplot(plot_temp , aes(x = dataset, y = value, color = set)) +
+    geom_point(alpha = 0.3, position = position_jitterdodge()) +
+  geom_boxplot() + 
+  #facet_grid(dataset~.) +
+  scale_color_brewer(palette = "Dark2") +
+  theme_prism(axis_text_angle = 45)
+g
+
+#ggsave("plots/pca_op_corrs.png")
+```
+
+

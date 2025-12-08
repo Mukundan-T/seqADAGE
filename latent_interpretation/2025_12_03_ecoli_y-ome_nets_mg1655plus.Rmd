@@ -1,0 +1,193 @@
+---
+title: "Gene-gene networks for ensemble of Ecoli MG1655+ models"
+output: powerpoint_presentation
+date: "2025-12-03"
+---
+
+# Setup
+
+### Options for figure outputs from chuncks
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  dev = "png",
+  dpi = 600,
+  fig.width = 5,
+  fig.height = 4
+)
+```
+
+### Libraries installed on r-compendia.sif singularity container
+
+```{r, warning=F, message=F, include=F}
+library(librarian)
+shelf(stringr,
+      corrplot,
+      reshape2,
+      igraph,
+      RColorBrewer,
+      Matrix,
+      ggplot2)
+```
+
+
+# Load data and models
+
+This may take a while, loads ~5G of data.
+
+* Load data and models
+* Load annotations and KEGG pathways
+* Gene-gene correlations
+
+
+```{r}
+source("2025_12_03_setup_ec_nets.R")
+source("2025_12_03_plot_funs_ec_nets.R")
+```
+
+
+# Make Nets
+
+Gene-gene nets can show correlation results with visual interpretation:
+
+- edge weight is gene-gene correlation in the data matrix or model weights
+- node color is e value from homolog mapping
+- node outline is whether gene is in pathway being plotted
+
+## Genes of interest
+
+* still to do: positive control genes gsbA, lptB, waaP
+
+```{r}
+# hits from Elodie's screen
+neb_hits <- c(
+  'E4PD_hit1' = '11997cc26382b2c286cd502685a104a5_6310',
+  'ABCtransporter_hit2a' = 'e0ba967783ad45e29471d6259beaaa64_7636',
+  'ABCtransporter_hit2b' = 'e0ba967783ad45e29471d6259beaaa64_7638',
+  'pyrG_hit3' = '11997cc26382b2c286cd502685a104a5_5994',
+  'rudS_hit4' = 'ad3da1d6c4c50fc5db002d664d7b0802_4675',
+  'DNAbinding_hit5' = 'e0ba967783ad45e29471d6259beaaa64_7630', # eloD41
+  'ECF_hit6' = 'e0ba967783ad45e29471d6259beaaa64_7632', # eloE
+  'ecfT_hit7' = 'e0ba967783ad45e29471d6259beaaa64_7634', # eloT
+  #'phoA' = '11997cc26382b2c286cd502685a104a5_840',
+  #'pstB' = '11997cc26382b2c286cd502685a104a5_8026',
+  'fepA' = '11997cc26382b2c286cd502685a104a5_1272'
+  )
+
+neb_hits_cat <- name_cat[neb_hits]
+```
+
+## Set threshold
+
+```{r}
+thresh = 0.15
+```
+
+
+## EloD operon
+
+* still to do: gather other genes in eloD operon
+* also other 0157_h7_EHEC strain-secific genes
+
+```{r, fig.height = 15, fig.width = 15, warning=F}
+de_genes <- neb_hits_cat[c(6:8)]
+plot_net(de_genes, edges, ec_anns, thresh, save = F)
+```
+
+
+## All screen Hits
+
+```{r, fig.height = 15, fig.width = 15, warning=F}
+de_genes <- neb_hits_cat
+plot_net(de_genes, edges, ec_anns, thresh, save = F)
+```
+
+
+## Seed one gene at a time
+
+```{r, fig.height = 8, fig.width = 8, warning=FALSE}
+
+t <- lapply(c(1:(length(neb_hits_cat))), function(x){ #
+  
+  de_genes <- neb_hits_cat[x]
+
+  plot_net(de_genes, edges, ec_anns,thresh, save = F)
+
+  plot_net_mat(de_genes, edges, ec_anns,thresh, save = F)
+
+  
+})
+
+```
+
+
+## Plot correlations of first 100 genes
+
+```{r}
+genes <- c(1:100)
+
+corr_compare(genes, ec_anns, 'n') # 'n', 'ld'
+```
+
+
+## Plot correlations of uncharacterized genes
+
+```{r}
+genes <- unchar_genes
+
+corr_compare(genes, ec_anns, 'n') # 'n', 'ld'
+```
+
+
+# For cytoscape
+
+```{r}
+#t <- for_cytoscape(ec_model_corrs,"ec_ens_mg1655plus_for_cyto.csv",0)
+```
+
+
+# Check ranges
+
+```{r}
+t <- lapply(c(1), function(x){
+  par(mfrow=c(2,1))
+  range(ec_comp_corr[ec_comp_corr < 1])
+  range(ec_model_corrs[[x]][ec_model_corrs[[x]] < 1])
+  hist(ec_comp_corr)
+  hist(ec_model_corrs[[x]])
+})
+```
+
+# Operon Correlations
+
+```{r, warning=F, message=F}
+g <- ggplot(op_corr_df, aes(x = corrs_med, fill = opnop, color = opnop)) +
+  geom_histogram(aes(y = ..density..), alpha = 0.25, binwidth = 0.05) +
+  geom_density(alpha = 0.5, fill = NA) +
+  facet_grid(df ~ . ) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_color_brewer(palette = "Dark2") +
+  theme_bw()
+g
+```
+
+```{r, warning=F, message=F}
+g <- ggplot(op_corr_df, aes(x = corrs_mu, fill = opnop)) +
+  geom_density(alpha = 0.5) +
+  facet_grid(df ~ . ) +
+  scale_fill_brewer(palette = "Dark2") +
+  theme_bw()
+g
+```
+
+
+# End Stuff
+
+```{r}
+sessionInfo()
+```
+

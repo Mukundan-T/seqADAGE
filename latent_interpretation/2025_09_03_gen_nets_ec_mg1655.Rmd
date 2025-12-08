@@ -1,0 +1,373 @@
+---
+title: "2024_04_28_gen_nets_sa_se_seqA_n100"
+output: powerpoint_presentation
+date: "2024-04-28"
+---
+
+# Setup
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  dev = "png",
+  dpi = 600,
+  fig.width = 5,
+  fig.height = 4
+)
+```
+
+```{r, warning=F, message=F, include=F}
+library(librarian)
+shelf(KEGGREST, 
+      EnrichmentBrowser,
+#      ComplexHeatmap,
+#      circlize,
+#      RColorBrewer,
+#      DESeq2,
+      dplyr,
+      stringr,
+      corrplot,
+      XML,
+      xml2,
+      tidyr,
+      dendextend,
+      GGally,
+      reshape2,
+      igraph,
+      RColorBrewer,
+      gridExtra,
+      ggplot2)
+#library(KEGGREST)
+#library(EnrichmentBrowser)
+#library(ComplexHeatmap)
+#library(circlize)
+#library(RColorBrewer)
+#library(DESeq2)
+#library(dplyr)
+#library(corrplot)
+#library(ggplot2)
+```
+
+# Load data and models
+
+
+```{r}
+
+# compendia
+ec_comp <- read.csv('../data_files/ecoli_MG165_genome_part2_log_counts_norm_01.csv')
+gpa <- read.csv('ecoli_pan_genomev3_gene_presence_absence_ann.csv', stringsAsFactors = F)
+rownames(gpa) <- gpa$first_name_comp
+
+
+rownames(ec_comp) <- make.unique(gpa[ec_comp$X, 'MG1655'])
+
+ec_model_files <- list.files('../outputs/weights/', pattern = "ecoli_MG165_genome_part2_log_counts_norm_01oli_MG165_genome_part2_log_counts_norm_01_seed:5")
+
+ec_models <- lapply(ec_model_files, function(x){
+  m <- read.csv(paste0('../outputs/weights/',x),
+                stringsAsFactors = F,
+                header = F)
+  rownames(m) <- rownames(ec_comp)
+  m
+}
+)
+  
+
+
+```
+
+
+
+
+# Load annotations and KEGG pathways
+
+```{r}
+
+ec_anns <- read.csv('Jessica--(MG1655)-All-genes-of-MG1655.txt',
+                    header = T,
+                 stringsAsFactors = F,
+                 sep = '\t')
+
+
+```
+
+
+
+# Gene-gene correlations
+
+```{r}
+corr_method <- 'pearson' # pearson, kendall, spearman
+ec_comp_corr <- cor(t(ec_comp[,-1]), method = corr_method) 
+rownames(ec_comp_corr)  <- rownames(ec_comp)
+colnames(ec_comp_corr)  <- rownames(ec_comp)
+
+
+
+ec_model_corrs <- lapply(ec_models, function(x){
+  comp_corr <- cor(t(x), method = corr_method)
+  rownames(comp_corr)  <- rownames(ec_comp)
+  colnames(comp_corr)  <- rownames(ec_comp)
+  comp_corr
+})
+
+```
+
+
+```{r}
+par(mfrow = c(1,2))
+
+corrplot(ec_comp_corr[1:100,1:100], 
+         method = 'color', 
+         order = 'original', 
+          tl.pos = 'n',
+         diag = FALSE)
+
+
+corrplot(ec_model_corrs[[1]][1:100,1:100], 
+         method = 'color', 
+         order = 'original', 
+          tl.pos = 'n',
+         diag = FALSE)
+
+```
+
+
+```{r}
+unchar_genes <- ec_anns$Accession.1[ec_anns$Characterization == "UNCHARACTERIZED"]
+unchar_genes <- unchar_genes[unchar_genes %in% rownames(ec_comp_corr)]
+par(mfrow = c(1,2))
+
+corrplot(ec_comp_corr[unchar_genes,unchar_genes], 
+         method = 'color', 
+         order = 'original', 
+          tl.pos = 'n',
+         diag = FALSE)
+
+
+corrplot(ec_model_corrs[[1]][unchar_genes,unchar_genes], 
+         method = 'color', 
+         order = 'original', 
+          tl.pos = 'n',
+         diag = FALSE)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# As nets
+
+Gene-gene nets can show correlation results with visual interpretation:
+
+- edge weight is gene-gene correlation in the data matrix or model weights
+- node color is e value from homolog mapping
+- node outline is whether gene is in pathway being plotted
+
+```{r}
+edges <- melt(ec_comp_corr)
+colnames(edges) <- c('from','to','weight')
+edges <- edges[edges$weight > 0.4,]
+de_genes <- unchar_genes[c(1:30)]
+
+de_edges <- edges[edges$weight > 0.8 & (edges$from %in% de_genes | edges$to %in% de_genes),]
+
+net_genes <- union(union(de_genes, de_edges$from), de_edges$to)
+net_edges <- de_edges
+net_edges <- net_edges[!is.na(net_edges$from),]
+
+net_edges <- net_edges[!net_edges$from == net_edges$to,]
+```
+
+```{r}
+#unique(ec_anns$Characterization)
+rownames(ec_anns) <- ec_anns$Accession.1
+my_palette <- colorRampPalette(c("blue", "white", "red", "black"))(n = 8)
+names(my_palette) <- unique(ec_anns$Characterization)[c(2,1,7,5,4,3,8,6)]
+
+g <- graph.data.frame(net_edges[,c(1,2,3)], directed=F)
+E(g)$width <- (net_edges$weight * 20)-10
+
+bd  <- sapply(vertex_attr(g, 'name'), function(x) if(x %in% de_genes){if(x %in% de_genes){'black'}else{'yellow'}}else{if(x %in% de_genes){'grey'}else{'white'}})
+
+
+
+node.colors <- ec_anns[vertex_attr(g, 'name'), "Characterization"]
+V(g)$color <- my_palette[node.colors]
+
+gnames <- ec_anns[vertex_attr(g, 'name'),'Common.Name']
+
+plot(g, 
+     vertex.label = NA, 
+     vertex.frame.color = bd)
+```
+
+```{r}
+ceb <- cluster_edge_betweenness(g) 
+```
+
+```{r}
+plot(ceb, g, 
+     vertex.label = gnames, 
+     col = vertex_attr(g, 'color'), 
+     mark.coly = brewer.pal(n = 8, name = "Set3"))
+```
+
+
+
+
+
+
+
+
+```{r, fig.height = 5, fig.width = 5, warning=FALSE}
+lapply(c(1:(length(unchar_genes) - 30)), function(x){ #
+  de_genes <- unchar_genes[c(x:(x+30))]
+  de_edges <- edges[edges$weight > 0.8 & (edges$from %in% de_genes | edges$to %in% de_genes),]
+  net_genes <- union(union(de_genes, de_edges$from), de_edges$to)
+  net_edges <- de_edges
+  net_edges <- net_edges[!is.na(net_edges$from),]
+  net_edges <- net_edges[!net_edges$from == net_edges$to,]
+  rownames(ec_anns) <- ec_anns$Accession.1
+  my_palette <- colorRampPalette(c("purple", "white", "darkorange", "black"))(n = 8)
+  names(my_palette) <- unique(ec_anns$Characterization)[c(2,1,7,5,4,3,8,6)]
+  
+  g <- graph.data.frame(net_edges[,c(1,2,3)], directed=F)
+  E(g)$width <- (net_edges$weight * 20)-15
+  
+  bd  <- sapply(vertex_attr(g, 'name'), function(x) if(x %in% de_genes){if(x %in% de_genes){'black'}else{'yellow'}}else{if(x %in% de_genes){'grey'}else{'white'}})
+  
+  
+  
+  node.colors <- ec_anns[vertex_attr(g, 'name'), "Characterization"]
+  V(g)$color <- my_palette[node.colors]
+  
+  gnames <- ec_anns[vertex_attr(g, 'name'),'Common.Name']
+  
+  ceb <- cluster_edge_betweenness(g) 
+  png(paste0(paste0("/work/gd134/ec_nets/",x),".png"),
+      res= 300,
+      height = 5,
+      width = 5,
+      units = "in")
+  plot(ceb, g, 
+     vertex.label = NA, #gnames, 
+     col = vertex_attr(g, 'color'), 
+     vertex.label.cex = .5,
+     vertex.label.color = "black",
+     vertex.frame.color = NA, #bd,
+     #palette = brewer.pal(n = 8, name = "Greys")#,
+     mark.coly = brewer.pal(n = 8, name = "Dark2")
+     )
+  dev.off()
+})
+```
+
+
+
+
+
+
+
+```{r, fig.height = 5, fig.width = 5, warning=FALSE}
+lapply(c(1:(length(unchar_genes) - 30)), function(x){ #(length(unchar_genes) - 30)
+  de_genes <- unchar_genes[c(x:(x+30))]
+  de_edges <- edges[edges$weight > 0.8 & (edges$from %in% de_genes | edges$to %in% de_genes),]
+  net_genes <- union(union(de_genes, de_edges$from), de_edges$to)
+  net_edges <- de_edges
+  net_edges <- net_edges[!is.na(net_edges$from),]
+  net_edges <- net_edges[!net_edges$from == net_edges$to,]
+
+  my_palette <- colorRampPalette(c("purple", "white", "darkorange", "black"))(n = 8)
+  names(my_palette) <- unique(ec_anns$Characterization)[c(2,1,7,5,4,3,8,6)]
+  
+  g <- graph.data.frame(net_edges[,c(1,2,3)], directed=F)
+
+  
+  gnames <- ec_anns[vertex_attr(g, 'name'),'Common.Name']
+  
+
+  g_temp <- vertex_attr(g, 'name')
+  
+  t1 <- ec_comp_corr[g_temp,g_temp]
+  t1[t1 == 1] <- 0
+
+  t2 <- ec_model_corrs[[1]][g_temp,g_temp]
+  t2[t2 == 1] <- 0
+  
+
+  png(paste0(paste0("/work/gd134/ec_corrplot/",x),"_corrplot.png"),
+      res= 300,
+      height = 3,
+      width = 6,
+      units = "in")
+  
+  par(mfrow = c(1,2))
+
+corrplot(t1, 
+         is.corr = F,
+         col.lim = c(min(t2), max(t1)),
+         method = 'color', 
+         order = 'original', 
+          tl.pos = 'n',
+         diag = FALSE)
+
+
+corrplot(t2, 
+         is.corr = F,
+         col.lim = c(min(t2), max(t2)),
+         method = 'color', 
+         order = 'original', 
+          tl.pos = 'n',
+         diag = FALSE)
+
+  dev.off()
+})
+```
+
+```{r}
+range(ec_comp_corr[ec_comp_corr < 1])
+range(ec_model_corrs[[1]][ec_model_corrs[[1]] < 1])
+
+lapply(c(1:10), function(x){
+range(ec_model_corrs[[x]][ec_model_corrs[[x]] < 1])
+})
+```
+
+
+```{r}
+lapply(c(1:10), function(x){
+  par(mfrow=c(2,1))
+hist(ec_comp_corr)
+hist(ec_model_corrs[[x]])
+})
+
+```
+
+
+```{r}
+sessionInfo()
+```
+

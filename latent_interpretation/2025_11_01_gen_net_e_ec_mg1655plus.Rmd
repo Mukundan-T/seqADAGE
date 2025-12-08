@@ -1,0 +1,705 @@
+---
+title: "2025_11_01_gen_nets_ec_e_mg1655plus"
+output: powerpoint_presentation
+date: "2025-11-01"
+---
+
+# Setup
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  dev = "png",
+  dpi = 600,
+  fig.width = 5,
+  fig.height = 4
+)
+```
+
+```{r, warning=F, message=F, include=F}
+library(librarian)
+shelf(#KEGGREST, 
+      #EnrichmentBrowser,
+#      ComplexHeatmap,
+#      circlize,
+#      RColorBrewer,
+#      DESeq2,
+      dplyr,
+      stringr,
+      corrplot,
+      XML,
+      xml2,
+      tidyr,
+      dendextend,
+      GGally,
+      reshape2,
+      igraph,
+      RCy3,
+      RColorBrewer,
+      gridExtra,
+      Matrix,
+      ggplot2)
+#library(KEGGREST)
+#library(EnrichmentBrowser)
+#library(ComplexHeatmap)
+#library(circlize)
+#library(RColorBrewer)
+#library(DESeq2)
+#library(dplyr)
+#library(corrplot)
+#library(ggplot2)
+```
+
+```{r}
+BiocManager::install('png')
+BiocManager::install('KEGGREST')
+#BiocManager::install('EnrichmentBrowser')
+```
+
+
+```{r}
+t <- read.csv("/work/gd134/adage_models/net450_100models_571_670_k=450_seed=735_ClusterByweighted_avgweight_network_ADAGE.txt", sep = "\t", skip = 2, header = F, nrows  = 6390)
+```
+
+# Load data and models
+
+
+```{r}
+
+# compendia
+ec_comp <- read.csv('../data_files/ecoli_MG165plus_genome_part2_log_counts_norm_01.csv')
+gpa <- read.csv('ecoli_pan_genomev3_gene_presence_absence_ann.csv', stringsAsFactors = F)
+rownames(gpa) <- gpa$first_name_comp
+
+name_cat <- paste(paste(paste(gpa$MG1655, gpa$O157_H7_EHEC, sep = "-"),
+                  gpa$BL21_DE3, sep = "-"), gpa$Gene, sep = "-")
+names(name_cat) <- gpa$first_name_comp
+
+
+#rownames(ec_comp) <- make.unique(gpa[ec_comp$X, 'MG1655'])
+rownames(ec_comp) <- make.unique(name_cat[ec_comp$X])
+
+#ec_model_files <- list.files('../outputs/weights/', pattern = "ecoli_MG165plus_*")
+
+ec_model_files <- list.files('/work/gd134/adage_models', pattern = "net450*")
+                             
+ec_models <- lapply(ec_model_files, function(x){
+  m <- read.csv(paste0('/work/gd134/adage_models/',x),
+                stringsAsFactors = F,
+                sep = "\t", skip = 2, header = F, nrows  = 6390)
+  rownames(m) <- rownames(ec_comp)
+  m
+}
+)
+  
+
+
+```
+
+
+
+
+# Load annotations and KEGG pathways
+
+```{r}
+
+ec_anns_mg1655 <- read.csv('Jessica--(MG1655)-All-genes-of-MG1655.txt',
+                    header = T,
+                 stringsAsFactors = F,
+                 sep = '\t')
+unchar_genes_mg1655 <- ec_anns_mg1655$Accession.1[ec_anns_mg1655$Characterization == "UNCHARACTERIZED"]
+
+rownames(ec_anns_mg1655 ) <- ec_anns_mg1655$Accession.1
+
+ec_anns_ehec <- read.csv('Jessica--(O157_H7-EHEC)-All-genes-of-E.-coli-serovar-O157_H7-str.-Sak.txt',
+                    header = T,
+                 stringsAsFactors = F,
+                 sep = '\t')
+unchar_genes_ehec <- ec_anns_ehec$Accession.1[ec_anns_ehec$Characterization == "UNCHARACTERIZED"]
+
+ec_anns_bl21de3 <- read.csv('Jessica--(BL21-DE3)-All-genes-of-E.-coli-BL21(DE3).txt',
+                    header = T,
+                 stringsAsFactors = F,
+                 sep = '\t')
+unchar_genes_bl21de3 <- ec_anns_bl21de3$Accession.1[ec_anns_bl21de3$Characterization == "UNCHARACTERIZED"]
+
+
+comp_genes_pool <- unique(unlist(lapply(rownames(ec_comp), function(x) (str_split(x,'-' )))))
+
+no_mg1655 <- rownames(ec_comp)[sapply(rownames(ec_comp), function(x) unlist(str_split(x,'-' ))[1] == "NA")]
+name_cat_unchar <- rownames(ec_comp)[sapply(rownames(ec_comp), function(x) unlist(str_split(x,'-' ))[1] %in% unchar_genes_mg1655)]
+
+unchar_genes <- rownames(ec_comp)[rownames(ec_comp) %in% c(name_cat_unchar)]
+unchar_genes_all <- rownames(ec_comp)[rownames(ec_comp) %in% c(name_cat_unchar, no_mg1655)]
+```
+
+
+
+
+
+
+# Gene-gene correlations
+
+```{r}
+corr_method <- 'pearson' # pearson, kendall, spearman
+ec_comp_corr <- cor(t(ec_comp[,-1]), method = corr_method) 
+rownames(ec_comp_corr)  <- rownames(ec_comp)
+colnames(ec_comp_corr)  <- rownames(ec_comp)
+
+
+
+ec_model_corrs <- lapply(ec_models, function(x){
+  comp_corr <- cor(t(x), method = corr_method)
+  rownames(comp_corr)  <- rownames(ec_comp)
+  colnames(comp_corr)  <- rownames(ec_comp)
+  comp_corr
+})
+
+```
+
+
+```{r}
+par(mfrow = c(1,2))
+
+t1 <- ec_comp_corr[1:100,1:100]
+t1[t1 == 1] <- 0
+corrplot(t1, 
+         is.corr = F,
+         col.lim = c(min(t1), max(t1)),
+         method = 'color', 
+         order = 'original', 
+          tl.pos = 'n',
+         diag = FALSE)
+
+t1 <- ec_model_corrs[[1]][1:100,1:100]
+t1[t1 == 1] <- 0
+corrplot(t1, 
+         is.corr = F,
+         col.lim = c(min(t1), max(t1)),
+         method = 'color', 
+         order = 'original', 
+          tl.pos = 'n',
+         diag = FALSE)
+
+```
+
+
+```{r}
+
+par(mfrow = c(1,2))
+
+t1 <- ec_comp_corr[unchar_genes,unchar_genes]
+t1[t1 == 1] <- 0
+corrplot(t1, 
+         is.corr = F,
+         col.lim = c(min(t1), max(t1)),
+         method = 'color', 
+         order = 'hclust', 
+          tl.pos = 'n',
+         diag = FALSE)
+
+t1 <- ec_model_corrs[[1]][unchar_genes,unchar_genes]
+t1[t1 == 1] <- 0
+corrplot(t1, 
+         is.corr = F,
+         col.lim = c(min(t1), max(t1)),
+         method = 'color', 
+         order = 'hclust', 
+          tl.pos = 'n',
+         diag = FALSE)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+ec_anns <- data.frame(
+  row.names = rownames(ec_comp_corr),
+  'Characterization' = sapply(rownames(ec_comp_corr), function(x){
+    n = unlist(str_split(x,'-' ))[1]
+    if( n %in% rownames(ec_anns_mg1655)){
+       ec_anns_mg1655[n, 'Characterization']
+    } 
+    else{
+       "NoMG1655"
+    }
+  }
+  )
+)
+```
+
+
+# For cytoscape
+
+```{r}
+ec_model_corrs_m <- melt(ec_model_corrs)
+
+
+
+
+m <- as.matrix(ec_model_corrs[[1]])
+m[lower.tri(m)] <- 0
+t <- triu(m)
+
+ec_model_corrs_m <- melt(m)
+
+ec_model_corrs_m_u <- ec_model_corrs_m[abs(ec_model_corrs_m$value) > 0 & 
+                                         abs(ec_model_corrs_m$value) < 1,]
+
+colnames(ec_model_corrs_m_u) <- c("gene1","gene2","corr")
+
+#write.csv(ec_model_corrs_m_u, "ec_ens_mg1655plus_for_cyto.csv")
+```
+
+
+
+# As nets
+
+Gene-gene nets can show correlation results with visual interpretation:
+
+- edge weight is gene-gene correlation in the data matrix or model weights
+- node color is e value from homolog mapping
+- node outline is whether gene is in pathway being plotted
+
+```{r}
+edges <- melt(ec_model_corrs[[1]])
+colnames(edges) <- c('from','to','weight')
+edges <- edges[edges$weight > 0.1,]
+edges <- edges[edges$weight < 1,]
+de_genes <- unchar_genes[c(1:30)]
+
+de_edges <- edges[edges$weight > 0.175 & (edges$from %in% de_genes | edges$to %in% de_genes),]
+
+net_genes <- union(union(de_genes, de_edges$from), de_edges$to)
+net_edges <- de_edges
+net_edges <- net_edges[!is.na(net_edges$from),]
+
+net_edges <- net_edges[!net_edges$from == net_edges$to,]
+```
+
+```{r}
+#unique(ec_anns$Characterization)
+
+my_palette <- colorRampPalette(c("blue", "white", "red", "black"))(n = 5)
+names(my_palette) <- unique(ec_anns$Characterization)[c(2,4,3,1,5)]
+
+g <- graph_from_data_frame(net_edges[,c(1,2,3)], directed=F)
+E(g)$width <- (net_edges$weight * 20)-10
+
+bd  <- sapply(vertex_attr(g, 'name'), function(x) if(x %in% de_genes){if(x %in% de_genes){'black'}else{'yellow'}}else{if(x %in% de_genes){'grey'}else{'white'}})
+
+
+
+node.colors <- ec_anns[vertex_attr(g, 'name'), "Characterization"]
+V(g)$color <- my_palette[node.colors]
+
+gnames <- ec_anns[vertex_attr(g, 'name'),'Common.Name']
+
+plot(g, 
+     vertex.label = NA, 
+     vertex.frame.color = bd)
+```
+
+```{r}
+ceb <- cluster_edge_betweenness(g) 
+```
+
+```{r, fig.height = 15, fig.width = 15}
+plot(ceb, g, 
+     vertex.label = gnames, 
+     col = vertex_attr(g, 'color'), 
+     mark.coly = brewer.pal(n = 8, name = "Set3"))
+```
+
+
+
+
+## Gene of interest
+
+
+```{r}
+
+neb_hits <- c(
+  'E4PD_hit1' = '11997cc26382b2c286cd502685a104a5_6310',
+  'ABCtransporter_hit2a' = 'e0ba967783ad45e29471d6259beaaa64_7636',
+  'ABCtransporter_hit2b' = 'e0ba967783ad45e29471d6259beaaa64_7638',
+  'pyrG_hit3' = '11997cc26382b2c286cd502685a104a5_5994',
+  'rudS_hit4' = 'ad3da1d6c4c50fc5db002d664d7b0802_4675',
+  'DNAbinding_hit5' = 'e0ba967783ad45e29471d6259beaaa64_7630',
+  'ECF_hit6' = 'e0ba967783ad45e29471d6259beaaa64_7632',
+  'ecfT_hit7' = 'e0ba967783ad45e29471d6259beaaa64_7634',
+  #'phoA' = '11997cc26382b2c286cd502685a104a5_840',
+  #'pstB' = '11997cc26382b2c286cd502685a104a5_8026',
+  'fepA' = '11997cc26382b2c286cd502685a104a5_1272'
+  )
+
+neb_hits_cat <- name_cat[neb_hits]
+
+```
+
+
+```{r}
+edges <- melt(ec_model_corrs[[1]])
+colnames(edges) <- c('from','to','weight')
+edges <- edges[edges$weight > 0,]
+edges <- edges[edges$weight < 1,]
+de_genes <- neb_hits_cat[1]
+
+de_edges <- edges[edges$weight > 0.15 & (edges$from %in% de_genes | edges$to %in% de_genes),]
+
+net_genes <- union(union(de_genes, de_edges$from), de_edges$to)
+net_edges <- de_edges
+net_edges <- net_edges[!is.na(net_edges$from),]
+
+net_edges <- net_edges[!net_edges$from == net_edges$to,]
+```
+
+```{r}
+#unique(ec_anns$Characterization)
+
+my_palette <- colorRampPalette(c("blue", "white", "red", "black"))(n = 5)
+names(my_palette) <- unique(ec_anns$Characterization)[c(2,4,3,1,5)]
+
+g <- graph_from_data_frame(net_edges[,c(1,2,3)], directed=F)
+E(g)$width <- (net_edges$weight * 20)-10
+
+bd  <- sapply(vertex_attr(g, 'name'), function(x) if(x %in% de_genes){if(x %in% de_genes){'black'}else{'yellow'}}else{if(x %in% de_genes){'grey'}else{'white'}})
+
+
+
+node.colors <- ec_anns[vertex_attr(g, 'name'), "Characterization"]
+V(g)$color <- my_palette[node.colors]
+
+gnames <- ec_anns[vertex_attr(g, 'name'),'Common.Name']
+
+plot(g, 
+     vertex.label = NA, 
+     vertex.frame.color = bd)
+```
+
+```{r}
+ceb <- cluster_edge_betweenness(g) 
+```
+
+```{r, fig.height = 20, fig.width = 20}
+plot(ceb, g, 
+     vertex.label = gnames, 
+     col = vertex_attr(g, 'color'), 
+     vertex.label.color = "black",
+     vertex.size = 5,
+     mark.coly = brewer.pal(n = 8, name = "Set3"))
+```
+
+
+
+
+
+## Save many pngs
+
+```{r}
+edges <- melt(ec_model_corrs[[1]])
+colnames(edges) <- c('from','to','weight')
+edges <- edges[edges$weight > 0,]
+edges <- edges[edges$weight < 1,]
+```
+
+
+```{r, fig.height = 8, fig.width = 8, warning=FALSE}
+lapply(c(1), function(m){
+  
+  edges <- melt(ec_model_corrs[[m]])
+  colnames(edges) <- c('from','to','weight')
+  edges <- edges[edges$weight > 0,]
+  edges <- edges[edges$weight < 1,]
+
+
+  lapply(c(1:(length(neb_hits_cat))), function(x){ #
+  de_genes <- neb_hits_cat[x]
+  de_edges <- edges[edges$weight > 0.15 & (edges$from %in% de_genes | edges$to %in% de_genes),]
+  net_genes <- union(union(de_genes, de_edges$from), de_edges$to)
+  net_edges <- de_edges
+  net_edges <- net_edges[!is.na(net_edges$from),]
+  net_edges <- net_edges[!net_edges$from == net_edges$to,]
+  #rownames(ec_anns) <- ec_anns$Accession.1
+  
+  my_palette <- colorRampPalette(c("blue", "white", "red", "black"))(n = 5)
+  names(my_palette) <- unique(ec_anns$Characterization)[c(2,4,3,1,5)]
+  
+  g <- graph.data.frame(net_edges[,c(1,2,3)], directed=F)
+  E(g)$width <-  ((net_edges$weight - min(net_edges$weight) ) / (max(net_edges$weight) - min(net_edges$weight))) * 10  #(net_edges$weight * 20)-15
+  
+  bd  <- sapply(vertex_attr(g, 'name'), function(x) if(x %in% de_genes){if(x %in% de_genes){'black'}else{'yellow'}}else{if(x %in% de_genes){'grey'}else{'white'}})
+  
+  
+  
+  node.colors <- ec_anns[vertex_attr(g, 'name'), "Characterization"]
+  V(g)$color <- my_palette[node.colors]
+  
+  gnames <- ec_anns[vertex_attr(g, 'name'),'Common.Name']
+  gnames <- str_sub(gnames, "_", "\n")
+  
+  ceb <- cluster_edge_betweenness(g) 
+#plot(g, 
+#     vertex.label = gnames, 
+#     col = vertex_attr(g, 'color'), 
+#     vertex.label.color = "black",
+#     vertex.size = 10,
+#     mark.coly = brewer.pal(n = 8, name = "Set3"))
+  name_temp <- vertex_attr(g, 'name')
+  vertex_attr(g, 'name') <- str_replace_all(name_temp, "-","\n")
+  png(paste0(paste(paste0("/work/gd134/ec_nets/ensemble_",names(neb_hits)[x]), m, sep = "_"),".png"),
+      res= 300,
+      height = 8,
+      width = 8,
+      units = "in")
+plot(g, 
+     #vertex.label = gnames, 
+     col = vertex_attr(g, 'color'), 
+     vertex.label.color = "black",
+     vertex.size = 20,
+     mark.coly = brewer.pal(n = 8, name = "Set3"))
+  dev.off()
+})
+})
+```
+
+
+
+
+
+
+
+```{r, fig.height = 5, fig.width = 8, warning=FALSE}
+lapply(c(1), function(m){
+  
+  edges <- melt(ec_model_corrs[[m]])
+  colnames(edges) <- c('from','to','weight')
+  #edges <- edges[edges$weight > 0,]
+  edges <- edges[edges$weight < 1,]
+
+
+  lapply(c(1:(length(neb_hits_cat))), function(x){ #
+  de_genes <- neb_hits_cat[x]
+  
+  de_edges <- edges[edges$weight > 0.15 & (edges$from %in% de_genes | edges$to %in% de_genes),]
+  net_genes <- union(union(de_genes, de_edges$from), de_edges$to)
+  net_edges <- de_edges
+  net_edges <- net_edges[!is.na(net_edges$from),]
+  net_edges <- net_edges[!net_edges$from == net_edges$to,]
+
+  #my_palette <- colorRampPalette(c("purple", "white", "darkorange", "black"))(n = 8)
+  #names(my_palette) <- unique(ec_anns$Characterization)[c(2,1,7,5,4,3,8,6)]
+  
+  g <- graph.data.frame(net_edges[,c(1,2,3)], directed=F)
+
+  
+  gnames <- ec_anns[vertex_attr(g, 'name'),'Common.Name']
+  
+
+  g_temp <- vertex_attr(g, 'name')
+  
+  t1 <- ec_comp_corr[g_temp,g_temp]
+  t1[t1 == 1] <- 0
+  rownames(t1) <- g_temp
+  colnames(t1) <- g_temp
+
+  t2 <- ec_model_corrs[[m]][g_temp,g_temp]
+  t2[t2 == 1] <- 0
+  rownames(t2) <- g_temp
+  colnames(t2) <- g_temp
+
+  png(paste0(paste(paste(paste0("/work/gd134/ec_corrplot/ensemble_",names(neb_hits)[x]), m, sep = "_"), neb_hits_cat[x], sep = "_"),"_corrplot.png"),
+      res= 300,
+      height = 4,
+      width = 8,
+      units = "in")
+  
+  par(mfrow = c(1,2))
+
+corrplot(t1, 
+         is.corr = F,
+         #title = neb_hits_cat[x], #paste(names(neb_hits)[x], neb_hits[x]),
+         col.lim = c(min(t1), max(t1)),
+         method = 'color', 
+         order = 'hclust', #'original', 
+          tl.pos = 'ld',
+         type = "lower",
+         tl.cex = .5,
+         tl.col = "black",
+         cl.cex = .3,
+         title = "gene expression",
+          mar = c(0,0,4,0),
+         diag = FALSE)
+
+
+corrplot(t2, 
+         is.corr = F,
+         col.lim = c(min(t2), max(t2)),
+         method = 'color', 
+         order = 'hclust', #'original', 
+          tl.pos = 'ld',
+         type = "lower",
+         tl.cex = .5,
+         tl.col = "black",
+         cl.cex = .3,
+         title = "model",
+          mar = c(0,0,4,0),
+         diag = FALSE)
+
+  dev.off()
+})
+})
+```
+
+```{r}
+range(ec_comp_corr[ec_comp_corr < 1])
+range(ec_model_corrs[[1]][ec_model_corrs[[1]] < 1])
+
+lapply(c(1), function(x){
+range(ec_model_corrs[[x]][ec_model_corrs[[x]] < 1])
+})
+```
+
+
+```{r}
+lapply(c(1), function(x){
+  par(mfrow=c(2,1))
+hist(ec_comp_corr)
+hist(ec_model_corrs[[x]])
+})
+
+```
+
+# Operon Correlations
+
+
+```{r}
+ops <- unique(unlist(lapply(ec_anns_mg1655$Transcription.Units, 
+                            function(x) str_split(x, " // "))))
+ops <- ops[! ops == ""]
+```
+
+
+```{r}
+
+opes_list <- lapply(ops, function(x){
+  genes <- unlist(sapply(c(1:nrow(ec_anns_mg1655)), function(g){
+    if(str_detect(ec_anns_mg1655$Transcription.Units[g], x)){
+      TRUE
+    }else{FALSE}
+  }))
+  gene_acc <- sapply(ec_anns_mg1655$Accession.1[genes], function(g) unlist(str_split(g, " // ")))
+  gene_acc
+})
+names(opes_list) <- ops
+```
+
+
+```{r}
+opes_corrs_model <- lapply(opes_list, function(x){
+  genes_temp <- unlist(x)
+  genes_temp <- name_cat_mg1655[genes_temp]
+  genes_temp <- genes_temp[genes_temp %in% rownames(ec_model_corrs[[1]])]
+
+  corr_temp <- ec_model_corrs[[1]][genes_temp,genes_temp]
+  corr_temp[lower.tri(corr_temp)] <- 0
+  corr_temp[abs(corr_temp) > 0 & corr_temp < 1]
+})
+
+opes_corrs_comp <- lapply(opes_list, function(x){
+  genes_temp <- unlist(x)
+  genes_temp <- name_cat_mg1655[genes_temp]
+  genes_temp <- genes_temp[genes_temp %in% rownames(ec_comp_corr)]
+  
+  corr_temp <- ec_comp_corr[genes_temp,genes_temp]
+  corr_temp[lower.tri(corr_temp)] <- 0
+  corr_temp[abs(corr_temp) > 0 & corr_temp < 1]
+})
+```
+
+
+
+```{r}
+nopes_corrs_both <- lapply(opes_list, function(x){
+  genes_temp <- unlist(x)
+  genes_temp <- name_cat_mg1655[genes_temp]
+  genes_temp <- genes_temp[genes_temp %in% rownames(ec_model_corrs[[1]])]
+  rand_genes <- sample(setdiff(rownames(ec_model_corrs[[1]]),genes_temp), length(genes_temp))
+  
+  corr_temp <- ec_model_corrs[[1]][rand_genes,rand_genes]
+  corr_temp[lower.tri(corr_temp)] <- 0
+  
+  
+  corr_temp2 <- ec_comp_corr[rand_genes,rand_genes]
+  corr_temp2[lower.tri(corr_temp2)] <- 0
+  
+  list(corr_temp2[(abs(corr_temp2) > 0) & (corr_temp2 < 1)], 
+       corr_temp[(abs(corr_temp) > 0) & (corr_temp < 1)])
+})
+
+```
+
+```{r}
+par(mfrow=c(2,2))
+
+hist(unlist(opes_corrs_comp), xlim = c(-1,1))
+hist(unlist(opes_corrs_model), xlim = c(-1,1))
+
+hist(unlist(lapply(nopes_corrs_both, function(x) x[[1]])), xlim = c(-1,1))
+hist(unlist(lapply(nopes_corrs_both, function(x) x[[2]])), xlim = c(-1,1))
+
+```
+
+```{r}
+all_corrs <- c(opes_corrs_comp,lapply(nopes_corrs_both, function(x) x[[1]]),
+                                     opes_corrs_model,lapply(nopes_corrs_both, function(x) x[[2]]))
+op_corr_df <- data.frame("operon" = rep(ops,4),
+                         "corrs_med" = sapply(all_corrs, function(x) median(x)),
+                         "corrs_mu" = sapply(all_corrs, function(x) mean(x)),
+                         "opnop" = rep(rep(c("operon", "random"), each=length(ops)),2),
+                         "df" = c(rep("compendium", length(ops)*2), rep("model", length(ops)*2))
+)
+
+g <- ggplot(op_corr_df, aes(x = corrs_med, fill = opnop, color = opnop)) +
+  geom_histogram(aes(y = ..density..), alpha = 0.25) +
+  geom_density(alpha = 0.5, fill = NA) +
+  facet_grid(df ~ . ) +
+  scale_fill_brewer(palette = "Dark2") +
+  scale_color_brewer(palette = "Dark2") +
+  theme_bw()
+g
+
+```
+
+```{r}
+g <- ggplot(op_corr_df, aes(x = corrs_mu, fill = opnop)) +
+  geom_density(alpha = 0.5) +
+  facet_grid(df ~ . ) +
+  scale_fill_brewer(palette = "Dark2") +
+  theme_bw()
+g
+```
+# End Stuff
+
+
+```{r}
+sessionInfo()
+```
+
