@@ -37,6 +37,7 @@ class TiedWeightsEncoder(Layer):
 	def build(self): #, input_shape
 		print("build")
 		self.kernel = K.transpose(self.encoder.kernel) #self.encoder.weights
+		#self._kernel = self.kernel
 		print("kernel set")
 		self.bias = self.add_weight(
             shape=(self.output_dim,),
