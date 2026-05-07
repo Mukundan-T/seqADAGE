@@ -180,7 +180,7 @@ def run_model(input_file, post_data = '', seed=123, enc_dim = 300, epochs=50, kl
     # save second model before fine-tuning
 	weights_tmp, b_weights_tmp = autoencoder.get_weights()[0:2]
 	file_desc = ( input_file[13:-4] + '_'
-	             + post_data[14:-4]
+	             #+ post_data[14:-4]
 	             + '_s' + str(seed)
 				 + '_n' + str(encoding_dim)
 				 + "_k1" + str(kl1)
