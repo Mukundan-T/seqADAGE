@@ -9,6 +9,8 @@ This project requires the keras library for python (python 3 as of 6/22/21) and 
 I've made an up-to-date environment for this project (tfk.yml)
 
 name: tfk
+
+
 channels:
   - defaults
   - anaconda
