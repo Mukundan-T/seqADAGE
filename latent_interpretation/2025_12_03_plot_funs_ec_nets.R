@@ -72,7 +72,7 @@ plot_net <- function(de_genes, edges, ec_anns, thresh = 0.15, save = F){ #
   net_edges <- net_edges[!net_edges$from == net_edges$to,]
   #rownames(ec_anns) <- ec_anns$Accession.1
   
-  my_palette <- colorRampPalette(c("blue", "white", "red", "black"))(n = 5)
+  my_palette <- colorRampPalette(c("blue", "white", "red", "red3"))(n = 5)
   names(my_palette) <- unique(ec_anns$Characterization)[c(2,4,3,1,5)]
   
   g <- graph.data.frame(net_edges[,c(1,2,3)], directed=F)
@@ -178,5 +178,6 @@ plot_net_mat <- function(de_genes, edges, ec_anns, thresh = 0.15, save=F){
     par(mfrow = c(1,2))
     corr_plot_scaled(t1, 'ld')
     corr_plot_scaled(t2, 'ld')
+    par(mfrow = c(1,1))
 
 }

@@ -108,7 +108,7 @@ ec_anns <- data.frame(
     }
   })
 )
-
+ec_anns[ec_anns == ""] <- "NoNote"
 ################################################################################
 # setup net
 # edges from correlation values
