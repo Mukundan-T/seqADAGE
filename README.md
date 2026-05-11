@@ -15,6 +15,14 @@ a useful repository for compendium building.
 Downstream analysis of adage models is preliminarily done here, but can
 be followed-up by using the [ADAGEpath](https://github.com/greenelab/ADAGEpath) R package.
 
+## In progress (To Do)
+
+* keep iterating trainings scripts in /Py/adage
+* update/integrate capatability with [big-little-data](https://www.refine.bio/)
+* update consensus clustering scripts and documentation in /ensemble_construction
+* expand assessment framework (gene-gene nets) in /node_interpretation and /latent_interpretation
+* transfer learning workflow for staph in /Py
+
 ## Setup
 
 This project requires the keras library for python (python 3 as of ]
