@@ -27,11 +27,11 @@ from tensorflow.keras import optimizers, regularizers, layers, initializers, mod
 from tensorflow.keras.layers import Input, Dense, Dropout
 #from keras.models import Model, Sequential
 #from tensorflow.keras import initializers
-import TiedWeightsEncoder as tw
+#import TiedWeightsEncoder as tw
 import Adage as ad
 
 
-from autoencoders import DenseLayerAutoencoder
+#from autoencoders import DenseLayerAutoencoder
 
 from DenseTranspose import DenseTranspose
 

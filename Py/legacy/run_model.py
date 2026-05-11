@@ -43,6 +43,8 @@ import keras_tuner
 import matplotlib.pyplot as plt
 import os
 
+from LinkedAE import LinkedAE
+
 
 
 
@@ -153,6 +155,7 @@ def run_model(input_file, post_data = '', seed=123, enc_dim = 300, epochs=50, kl
 	"""
 
 	"""
+	print(seed)
 	## check if there is data from post fine-tuning
 	if(post_data == ''):
 		post_data = input_file
@@ -167,8 +170,9 @@ def run_model(input_file, post_data = '', seed=123, enc_dim = 300, epochs=50, kl
 
 	if(tied):
 		print("tied")
-		autoencoder = linked_ae_dt(encoding_dim, gene_num, act,act2, init,
-								seed, kl1, kl2)
+		autoencoder = LinkedAE(encoding_dim,  act2, dropout)
+		#autoencoder = linked_ae_dt(encoding_dim, gene_num, act,act2, init,
+		#							seed, kl1, kl2)
 	else:
 		autoencoder = unlinked_ae_dt(encoding_dim, gene_num, act,act2, init,
 								seed, kl1, kl2)
@@ -337,4 +341,5 @@ if __name__ == '__main__':
 		parser.add_argument('filename',type=str, nargs=1,
 			help='filpath to training set.')
 		args=parser.parse_args()
+		print(args.filename[0])
 		run_model(args.filename[0])
