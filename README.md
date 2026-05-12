@@ -18,7 +18,7 @@ be followed-up by using the [ADAGEpath](https://github.com/greenelab/ADAGEpath) 
 ## In progress (To Do)
 
 * keep iterating trainings scripts in /Py/adage
-* update/integrate capatability with [big-little-data](https://www.refine.bio/)
+* update/integrate capatability with [big-little-data](https://github.com/georgiadoing/big-little-data)
 * update consensus clustering scripts and documentation in /ensemble_construction
 * expand assessment framework (gene-gene nets) in /node_interpretation and /latent_interpretation
 * transfer learning workflow for staph in /Py
