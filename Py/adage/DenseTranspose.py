@@ -60,7 +60,7 @@ class DenseTranspose(keras.layers.Layer):
     def get_config(self):
         config = super().get_config()
         config.update({
-			"dense": self.dense,
+            "dense": self.dense,
             "activation": self.activation
-		})
+        })
         return config
