@@ -9,12 +9,13 @@ Usage
 
 """
 
-import os
-from keras.models import Model, Sequential
 import numpy as np
 import pandas
 from scipy.stats import hypergeom
-from statsmodels.stats.multitest import multipletests
+
+# import os
+# from keras.models import Model, Sequential
+# from statsmodels.stats.multitest import multipletests
 
 class Adage(object):
     """
@@ -66,7 +67,7 @@ class Adage(object):
         """
         self.autoencoder = autoencoder
         self.history = history
-        self.weights = autoencoder.get_weights()[0] #np.zeros((train_comp.shape[0],train_comp.shape[0])) #
+        self.weights = autoencoder.get_weights()[0] # np.zeros((train_comp.shape[0],train_comp.shape[0]))
         self.loss = history.history['loss']
         self.val_loss = history.history['val_loss']
         self.hwg_cutoff = 2.5
@@ -82,10 +83,7 @@ class Adage(object):
         self.go_ps = []
         self.regs_ps = []
         self.ops_ps = []
-        
-
-
-
+    
     def set_hwg_cutoff(self, x):
         """Uses standard deviation cutoff to make high/low weight gene sets"""
         self.weights = self.autoencoder.get_weights()[0]
