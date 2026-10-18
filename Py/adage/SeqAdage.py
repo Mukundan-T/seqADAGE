@@ -245,7 +245,8 @@ class SeqAdage(ad.Adage):
         dropout = hp.Float(name="dropout", min_value=d[0], max_value=d[1], step = d[2])
         # Automatically assign True/False values.
         act1 = hp.Choice('act1', a1)
-        act2 = hp.Choice('act2', a2)
+        act2 = act1
+        # act2 = hp.Choice('act2', a2)
         shuffle = hp.Boolean("shuffle", default=False)
         init = hp.Choice('init', i) 
         kl1 = hp.Float('kl1', min_value = k1[0], max_value = k1[1], step = k1[2])
