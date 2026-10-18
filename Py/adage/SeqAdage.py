@@ -15,10 +15,9 @@ from adage import LinkedAE as lae
 from adage import AdageHyperModel as ahm
 import pandas as pd
 import numpy as np
-from tensorflow.keras import optimizers, losses
+import keras
 import keras_tuner
-
-
+# from tensorflow.keras import optimizers, losses
 
 class SeqAdage(ad.Adage): 
     """
@@ -55,7 +54,7 @@ class SeqAdage(ad.Adage):
     def __init__(self, input_file, seed=100, enc_dim=10 ,kl1=0, kl2=0, 
                  act="tanh", act2="tanh", tied=True, epochs=50, 
                  init="glorot_uniform", batch_size=10, dropout=0, mm=0, 
-                 lr=0.01, v=1):
+                 lr=0.01, v=1, lambda_ultra=0):
         """Constructor for SeqAdage with hyperparameters
 
         This class inherits the Adage class, instantiating a linked
@@ -79,7 +78,7 @@ class SeqAdage(ad.Adage):
             lr (flt): Learning rate, 0-1
             v (int): Verbose, 1-True, 0-False
         """
-        self.autoencoder = lae.LinkedAE(enc_dim, act2, dropout,kl1,kl2,init)
+        self.autoencoder = lae.LinkedAE(enc_dim, act2, dropout, kl1, kl2, init, lambda_ultra=lambda_ultra)
         self.all_comp = pd.read_csv(input_file, index_col=0)
         self.gene_num = np.size(self.all_comp, 0)
         self.encoding_dim = enc_dim
@@ -96,7 +95,7 @@ class SeqAdage(ad.Adage):
         self.v = v
         self.history = None
         self.input_file = input_file
-        #super().__init__(self.autoencoder, self.history, self.all_comp)
+        # super().__init__(self.autoencoder, self.history, self.all_comp)
 
     def get_act(self):
         return self.act
@@ -111,18 +110,15 @@ class SeqAdage(ad.Adage):
         x_train_noisy = x_train + (noise_factor* np.random.normal(loc=0.0,scale=1.0, size=x_train.shape))
         # limit to range 0-1
         x_train_noisy = np.clip(x_train_noisy, 0., 1.)
-
         return(x_train, x_train_noisy)
-
-
 
     def train_model_variable(self, ep):
         """Fits the autoencoder model to the training set."""
         np.random.seed(self.seed)
         x_train, x_train_noisy = self.prep_data()
-        optim = optimizers.SGD(learning_rate=self.lr, momentum=self.mm) # lr=0.001, rho=0.95, epsilon=1e-07
+        optim = keras.optimizers.SGD(learning_rate=self.lr, momentum=self.mm) # lr=0.001, rho=0.95, epsilon=1e-07
         self.autoencoder.compile(optimizer=optim, 
-                        loss=losses.MeanSquaredError()) #BinaryCrossentropy(from_logits=False)) 
+                        loss=keras.losses.MeanSquaredError()) #BinaryCrossentropy(from_logits=False)) 
 
         history = self.autoencoder.fit(x=x_train, 
                                   y=x_train_noisy, 
@@ -188,9 +184,9 @@ class SeqAdage(ad.Adage):
 
         # initialize a new data with new input shape
         autoencoder2 = lae.LinkedAE(self.encoding_dim, self.act, self.dropout,self.kl1,self.kl2,self.init)
-        optim = optimizers.SGD(learning_rate=self.lr, momentum=self.mm) # lr=0.001, rho=0.95, epsilon=1e-07
+        optim = keras.optimizers.SGD(learning_rate=self.lr, momentum=self.mm) # lr=0.001, rho=0.95, epsilon=1e-07
         autoencoder2.compile(optimizer=optim, 
-                        loss=losses.MeanSquaredError()) #BinaryCrossentropy(from_logits=False)) 
+                        loss=keras.losses.MeanSquaredError()) #BinaryCrossentropy(from_logits=False)) 
         
         history = autoencoder2.fit(x=x_train, 
                                   y=x_train_noisy, 
@@ -223,7 +219,6 @@ class SeqAdage(ad.Adage):
         self.history = history
         return(autoencoder2)
 
-
     def save_weights(self, out_dir, out_file):
         """
         Save logs and output for a model in an outputs foolder
@@ -243,11 +238,8 @@ class SeqAdage(ad.Adage):
                   a1=["sigmoid","tanh","relu", "celu"], a2=["sigmoid","tanh","relu", "celu"],
                   i=["glorot_uniform","glorot_normal"],k1=[0,.15,.005],
                   k2=[0,.9,.05],l=[.001,.1,.01],b=[5,100,5],m=[0.0,.9,.1]):
-        """
-    	
-    	"""
         hp = keras_tuner.HyperParameters()
-    	# defining the number of neurons dynamically
+      	# defining the number of neurons dynamically
         units = hp.Int(name="units", min_value=u[0], max_value=u[1], step=u[2])   
         # defining the dropout rate
         dropout = hp.Float(name="dropout", min_value=d[0], max_value=d[1], step = d[2])
@@ -265,24 +257,27 @@ class SeqAdage(ad.Adage):
     
         #all_comp = pd.read_csv(input_file, index_col=0)
         gene_num = np.size(self.all_comp, 0)
-    
-        tuner = keras_tuner.Hyperband(
-                           hypermodel=ahm.AdageHyperModel(input_shape=gene_num),#
-    		               hyperparameters = hp,
-                           objective = "val_loss", #optimize val acc
-                           max_epochs=50, #for each candidate model
-                           overwrite=True,  #overwrite previous results
-                           directory='/work/gd134/hyperband_search_dir', #Saving dir
-                           project_name=self.input_file.removesuffix(".csv").replace("../data_files/","")+"_" + str(seed))
         
+        tuner = keras_tuner.Hyperband(
+            hypermodel=ahm.AdageHyperModel(input_shape=gene_num),#
+            hyperparameters = hp,
+            objective = "val_loss", #optimize val acc
+            max_epochs=50, #for each candidate model
+            overwrite=True,  #overwrite previous results
+            directory='/work/gd134/hyperband_search_dir', #Saving dir
+            project_name=self.input_file.removesuffix(".csv").replace("../data_files/","")+"_" + str(seed)
+        )
         
         #x_train, x_train_noisy = prep_data(all_comp, seed)
         x_train, x_train_noisy = self.prep_data()
         
         np.random.seed(seed)
-        train_idxs = np.random.choice(x_train.shape[0],
-    							      int(x_train.shape[0]*0.9), replace=False)
-    	#print(train_idxs[1:5])
+        train_idxs = np.random.choice(
+            x_train.shape[0], 
+            int(x_train.shape[0]*0.9), 
+            replace=False
+        )
+        #print(train_idxs[1:5])
         x_train_train = x_train[train_idxs,:]
         x_train_test = x_train[~np.in1d(range(x_train.shape[0]),train_idxs),:]
     
@@ -309,7 +304,4 @@ class SeqAdage(ad.Adage):
     	    x = x_train_noise_train, 
     		y = x_train_train,) 
         
-        return(best_hps, tuner)
-
-
-        
+        return (best_hps, tuner)
