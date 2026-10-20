@@ -1,3 +1,15 @@
+"""
+Mukundan Thanigaivelan 
+UltraRegularizer class
+
+October 18, 2026
+
+A class to define a custom loss function penalty using ultrametric p-adic topology. Inherits
+the Keras Regularizer class.
+
+:author: Mukundan Thanigaivelan
+"""
+
 import tensorflow as tf
 from keras.regularizers import Regularizer
 
