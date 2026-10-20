@@ -48,8 +48,8 @@ class AdageHyperModel(kt.HyperModel):
         # act1 = hp.Choice('act1', ["sigmoid","tanh","relu", "celu"])
         # tied = hp.Choice('tied', [True, False])
         # act2 = hp.Choice('act2', ["sigmoid","tanh","relu", "celu"])
-		act1 = hp.Choice('act1', ["sigmoid","tanh","relu", "celu"])
-		act2 = act1
+	    act1 = hp.Choice('act1', ["sigmoid","tanh","relu", "celu"])
+	    act2 = act1
         init = hp.Choice('init', ["glorot_uniform","glorot_normal"])
         kl1 = hp.Float('kl1', min_value = 0, max_value = 1, step = 0.1)
         kl2 = hp.Float('kl2', min_value = 0, max_value = 1, step = 0.1)
