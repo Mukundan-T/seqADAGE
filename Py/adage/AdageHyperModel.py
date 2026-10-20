@@ -7,6 +7,8 @@ A class for a tied-weight autoencoder that can be used with Keras Tuners.
 Usage
 	constructor
 
+:editor: Mukundan Thanigaivelan (10/19/2026)
+ - Changed act2 to match act1
 """
 
 import keras
@@ -45,7 +47,9 @@ class AdageHyperModel(kt.HyperModel):
         enc_dim= hp.Choice('units', [8, 16, 32, 64])
         # act1 = hp.Choice('act1', ["sigmoid","tanh","relu", "celu"])
         # tied = hp.Choice('tied', [True, False])
-        act2 = hp.Choice('act2', ["sigmoid","tanh","relu", "celu"])
+        # act2 = hp.Choice('act2', ["sigmoid","tanh","relu", "celu"])
+		act1 = hp.Choice('act1', ["sigmoid","tanh","relu", "celu"])
+		act2 = act1
         init = hp.Choice('init', ["glorot_uniform","glorot_normal"])
         kl1 = hp.Float('kl1', min_value = 0, max_value = 1, step = 0.1)
         kl2 = hp.Float('kl2', min_value = 0, max_value = 1, step = 0.1)
@@ -63,7 +67,7 @@ class AdageHyperModel(kt.HyperModel):
         # model = models.Model(inputs=inputs, outputs=x)
 
         # model = keras.models.Sequential()
-        model = lae.LinkedAE(enc_dim, act2, dropout,kl1,kl2,init)
+        model = lae.LinkedAE(enc_dim, act1, dropout, kl1, kl2, init)
 
         '''
         dense_1 = keras.layers.Dense(encoding_dim, activation=act1,
